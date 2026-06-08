@@ -26,7 +26,13 @@ export default function AdminPage() {
 }
 
 function AdminPanel({ onLogout }: { onLogout: () => void }) {
-  const [settings, setSettings] = useState<TournamentSettings | null>(null)
+  const [settings, setSettings] = useState<TournamentSettings & {
+    actual_tournament_winner?: string
+    actual_golden_boot?: string
+  } | null>(null)
+  const [tournamentWinner, setTournamentWinner] = useState('')
+  const [goldenBoot, setGoldenBoot] = useState('')
+  const [savingEndgame, setSavingEndgame] = useState(false)
   const [results, setResults] = useState<Record<string, { home: string; away: string }>>({})
   const [savedResults, setSavedResults] = useState<Result[]>([])
   const [participantCount, setParticipantCount] = useState(0)
@@ -47,7 +53,10 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
       supabase.from('participants').select('id', { count: 'exact', head: true }),
     ])
     if (sRes.data) {
-      setSettings(sRes.data as TournamentSettings)
+      const s = sRes.data as TournamentSettings & { actual_tournament_winner?: string; actual_golden_boot?: string }
+      setSettings(s)
+      if (s.actual_tournament_winner) setTournamentWinner(s.actual_tournament_winner)
+      if (s.actual_golden_boot) setGoldenBoot(s.actual_golden_boot)
       const goals = (sRes.data as Record<string, unknown>).scorer_goals as Record<string, number> ?? {}
       const m: Record<string, string> = {}
       for (const [k, v] of Object.entries(goals)) m[k] = String(v)
@@ -169,6 +178,52 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
               <p className="font-bold text-white">Phase</p>
               <p className="text-zinc-400">Currently: <span className="text-white font-semibold">{settings.current_phase}</span></p>
               <p className="text-zinc-600 text-xs mt-1">Knockout phase management coming in Phase 2.</p>
+            </div>
+
+            {/* Endgame — Tournament Winner + Golden Boot */}
+            <div className="glass rounded-2xl p-5 space-y-4">
+              <div>
+                <p className="font-bold text-white text-sm">🏆 Tournament Winner <span className="text-yellow-400">(+10 pts)</span></p>
+                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Set when the tournament ends — auto-awards 10pts to correct pickers</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tournamentWinner}
+                    onChange={e => setTournamentWinner(e.target.value)}
+                    placeholder="e.g. England"
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="font-bold text-white text-sm">⚽ Golden Boot <span className="text-yellow-400">(+10 pts)</span></p>
+                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Set when the tournament ends — auto-awards 10pts to correct pickers</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={goldenBoot}
+                    onChange={e => setGoldenBoot(e.target.value)}
+                    placeholder="e.g. Harry Kane"
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+              </div>
+              <button
+                disabled={savingEndgame}
+                onClick={async () => {
+                  setSavingEndgame(true)
+                  await supabase.from('tournament_settings').update({
+                    actual_tournament_winner: tournamentWinner.trim() || null,
+                    actual_golden_boot: goldenBoot.trim() || null,
+                  }).eq('id', 1)
+                  setSavingEndgame(false)
+                  setMessage('✓ Tournament outcomes saved — points auto-calculated!')
+                  setTimeout(() => setMessage(''), 3000)
+                }}
+                className="btn-gold w-full py-3 rounded-xl text-sm"
+              >
+                {savingEndgame ? 'Saving…' : 'Save & Award Points'}
+              </button>
             </div>
           </div>
         )}

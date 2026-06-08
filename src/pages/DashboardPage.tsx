@@ -14,6 +14,8 @@ interface PlayerRow extends Participant {
   total: number
   matchPoints: number
   groupWinnerPoints: number
+  tournamentWinnerPoints: number
+  goldenBootPoints: number
   s: number; sj: number; r: number; rj: number; played: number
 }
 
@@ -23,7 +25,11 @@ export default function DashboardPage() {
   const [searchParams] = useSearchParams()
   const isPreview = searchParams.get('preview') === ADMIN_SECRET
 
-  const [settings, setSettings] = useState<TournamentSettings & { scorer_goals?: Record<string, number> } | null>(null)
+  const [settings, setSettings] = useState<TournamentSettings & {
+    scorer_goals?: Record<string, number>
+    actual_tournament_winner?: string
+    actual_golden_boot?: string
+  } | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [results, setResults] = useState<Result[]>([])
@@ -128,7 +134,17 @@ export default function DashboardPage() {
       for (const g of GROUPS) {
         if (actualGroupWinners[g] && myWinners[g] === actualGroupWinners[g]) groupWinnerPoints += GROUP_WINNER_POINTS
       }
-      return { ...p, matchPoints, groupWinnerPoints, total: matchPoints + groupWinnerPoints, s, sj, r, rj, played }
+
+      const tournamentWinnerPoints =
+        settings?.actual_tournament_winner && p.winner_pick === settings.actual_tournament_winner ? 10 : 0
+      const goldenBootPoints =
+        settings?.actual_golden_boot && p.top_scorer_pick === settings.actual_golden_boot ? 10 : 0
+
+      return {
+        ...p, matchPoints, groupWinnerPoints, tournamentWinnerPoints, goldenBootPoints,
+        total: matchPoints + groupWinnerPoints + tournamentWinnerPoints + goldenBootPoints,
+        s, sj, r, rj, played,
+      }
     }).sort((a, b) => b.total - a.total)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
 
@@ -257,13 +273,16 @@ export default function DashboardPage() {
               />
             )}
 
+            {/* Leaderboard */}
+            <LeaderboardSection leaderboard={leaderboard} />
+
+            {/* Points Guide */}
+            <PointsGuide />
+
             {/* Top Scorer Race */}
             {topScorerRace.length > 0 && (
               <TopScorerRace race={topScorerRace} />
             )}
-
-            {/* Leaderboard */}
-            <LeaderboardSection leaderboard={leaderboard} />
 
             {/* Group filter */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -416,6 +435,40 @@ function TopScorerRace({ race }: { race: Array<{ name: string; picked: number; g
   )
 }
 
+// ─── Points Guide ─────────────────────────────────────────────────────────────
+
+function PointsGuide() {
+  const rows = [
+    { icon: '🏆', label: 'Tournament Winner', pts: '10 pts', color: 'text-yellow-400', note: 'Awarded at the end' },
+    { icon: '⚽', label: 'Golden Boot', pts: '10 pts', color: 'text-yellow-400', note: 'Awarded at the end' },
+    { icon: '🏁', label: 'Group Winner', pts: '5 pts', color: 'text-yellow-300', note: 'Per group, 12 available' },
+    { icon: '🎯', label: 'Correct Score', pts: '5 pts', color: 'text-yellow-400', note: 'Exact scoreline' },
+    { icon: '✅', label: 'Correct Result', pts: '2 pts', color: 'text-emerald-400', note: 'Win / Draw / Loss' },
+    { icon: '🃏', label: 'Joker', pts: '×2', color: 'text-white', note: '1 per group, doubles points' },
+  ]
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+        <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">
+          Points 📋
+        </div>
+      </div>
+      <div className="divide-y divide-blue-900/40">
+        {rows.map(({ icon, label, pts, color, note }) => (
+          <div key={label} className="px-5 py-3 flex items-center gap-4">
+            <span className="text-xl w-8 flex-shrink-0">{icon}</span>
+            <div className="flex-1">
+              <div className="font-bold text-sm text-white">{label}</div>
+              <div className="text-xs text-blue-500">{note}</div>
+            </div>
+            <div className={`font-black text-lg ${color}`}>{pts}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
 
 function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
@@ -423,7 +476,11 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
     <div className="ss-card overflow-hidden">
       <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
         <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏆 Leaderboard</div>
-        <span className="text-xs text-blue-400 ml-auto">S=Correct Score · R=Correct Result · J=Joker</span>
+        <span className="text-xs text-blue-400 ml-auto hidden sm:block">
+          <span className="text-yellow-400 font-bold">S</span>=Correct Score (5pts) ·{' '}
+          <span className="text-emerald-400 font-bold">R</span>=Correct Result (2pts) ·{' '}
+          <span className="text-yellow-300 font-bold">J</span>=Joker ×2
+        </span>
       </div>
       {/* Desktop table */}
       <div className="hidden sm:block overflow-x-auto">
