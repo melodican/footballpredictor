@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { FIXTURES_BY_GROUP, TEAM_FLAGS } from '../data/fixtures'
+import { FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import type { Result, TournamentSettings } from '../types'
 import { GROUPS } from '../types'
 
@@ -40,10 +40,12 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
   const [message, setMessage] = useState('')
-  const [tab, setTab] = useState<'results' | 'settings' | 'scorers'>('results')
+  const [tab, setTab] = useState<'results' | 'groups' | 'scorers' | 'settings'>('results')
   const [scorerGoals, setScorerGoals] = useState<Record<string, string>>({})
   const [savingScorers, setSavingScorers] = useState(false)
   const [topScorerPicks, setTopScorerPicks] = useState<Array<{ name: string; count: number }>>([])
+  const [confirmedGroupWinners, setConfirmedGroupWinners] = useState<Record<string, string>>({})
+  const [savingGroupWinners, setSavingGroupWinners] = useState(false)
 
 
   async function load() {
@@ -61,6 +63,8 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
       const m: Record<string, string> = {}
       for (const [k, v] of Object.entries(goals)) m[k] = String(v)
       setScorerGoals(m)
+      const cgw = (sRes.data as Record<string, unknown>).confirmed_group_winners as Record<string, string> ?? {}
+      setConfirmedGroupWinners(cgw)
     }
     // Load top scorer picks
     const pRes2 = await supabase.from('participants').select('top_scorer_pick')
@@ -143,12 +147,12 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-1">
-          {([['results', '⚽ Results'], ['scorers', '🏅 Scorers'], ['settings', '⚙️ Settings']] as const).map(([t, label]) => (
+        <div className="grid grid-cols-4 gap-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-1">
+          {([['results', '⚽ Results'], ['groups', '🏁 Groups'], ['scorers', '🏅 Scorers'], ['settings', '⚙️ Settings']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${
+              className={`py-2.5 rounded-xl text-xs font-bold transition ${
                 tab === t ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -223,6 +227,61 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
                 className="btn-gold w-full py-3 rounded-xl text-sm"
               >
                 {savingEndgame ? 'Saving…' : 'Save & Award Points'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Group Winners */}
+        {tab === 'groups' && (
+          <div className="space-y-4">
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-bold text-white mb-1">🏁 Confirm Group Winners</h3>
+              <p className="text-zinc-400 text-xs mb-5">
+                Select the winner for each group once all their games are played.
+                <span className="text-yellow-400 font-semibold"> Points are only awarded when you save here.</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {GROUPS.map(g => {
+                  const teams = GROUP_TEAMS[g]
+                  const saved = confirmedGroupWinners[g]
+                  return (
+                    <div key={g} className={`rounded-xl p-3 border transition ${saved ? 'bg-yellow-400/5 border-yellow-400/30' : 'bg-zinc-900 border-zinc-800'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-black text-zinc-400 uppercase">Group {g}</span>
+                        {saved && <span className="text-yellow-400 text-xs font-bold">✓ +5pts</span>}
+                      </div>
+                      <select
+                        value={confirmedGroupWinners[g] || ''}
+                        onChange={e => setConfirmedGroupWinners(prev => ({ ...prev, [g]: e.target.value }))}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-2 text-white text-xs font-semibold focus:outline-none focus:border-yellow-400"
+                      >
+                        <option value="">Not confirmed yet</option>
+                        {teams.map(t => (
+                          <option key={t} value={t}>{TEAM_FLAGS[t]} {t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                disabled={savingGroupWinners}
+                onClick={async () => {
+                  setSavingGroupWinners(true)
+                  // Remove empty entries
+                  const toSave: Record<string, string> = {}
+                  for (const [k, v] of Object.entries(confirmedGroupWinners)) {
+                    if (v) toSave[k] = v
+                  }
+                  await supabase.from('tournament_settings').update({ confirmed_group_winners: toSave }).eq('id', 1)
+                  setSavingGroupWinners(false)
+                  setMessage(`✓ Group winners saved — points awarded to correct pickers!`)
+                  setTimeout(() => setMessage(''), 4000)
+                }}
+                className="btn-gold w-full mt-5 py-3 rounded-xl"
+              >
+                {savingGroupWinners ? 'Saving…' : 'Save & Award Group Points'}
               </button>
             </div>
           </div>

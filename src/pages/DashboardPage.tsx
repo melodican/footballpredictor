@@ -29,6 +29,7 @@ export default function DashboardPage() {
     scorer_goals?: Record<string, number>
     actual_tournament_winner?: string
     actual_golden_boot?: string
+    confirmed_group_winners?: Record<string, string>
   } | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
@@ -79,21 +80,13 @@ export default function DashboardPage() {
     return m
   }, [predictions])
 
+  // Group winners — only awarded when admin explicitly confirms them
   const actualGroupWinners = useMemo(() => {
+    const confirmed = settings?.confirmed_group_winners ?? {}
     const winners: Record<Group, string | null> = {} as Record<Group, string | null>
-    for (const g of GROUPS) {
-      const fixtures = FIXTURES_BY_GROUP[g]
-      const allIn = fixtures.every(f => resultsMap[f.id])
-      if (!allIn) { winners[g] = null; continue }
-      const scores: Record<string, { home: number; away: number }> = {}
-      for (const f of fixtures) {
-        const r = resultsMap[f.id]
-        if (r) scores[f.id] = { home: r.home_score, away: r.away_score }
-      }
-      winners[g] = calculateGroupStandings(GROUP_TEAMS[g], fixtures, scores)[0]?.team ?? null
-    }
+    for (const g of GROUPS) winners[g] = confirmed[g] ?? null
     return winners
-  }, [resultsMap])
+  }, [settings])
 
   const predictedGroupWinners = useMemo(() => {
     const result: Record<string, Record<Group, string>> = {}
