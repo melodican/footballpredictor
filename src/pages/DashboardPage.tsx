@@ -620,6 +620,8 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
 
 // ─── Ticker Generator ─────────────────────────────────────────────────────────
 
+function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
+
 function generateTickerItems(
   leaderboard: PlayerRow[],
   results: Result[],
@@ -629,26 +631,105 @@ function generateTickerItems(
 ): string[] {
   const items: string[] = []
 
-  // Recent results
-  for (const result of [...results].reverse().slice(0, 8)) {
-    const f = fixtures.find(x => x.id === result.fixture_id)
-    if (f) items.push(`${TEAM_FLAGS[f.homeTeam]} ${f.homeTeam} ${result.home_score}–${result.away_score} ${f.awayTeam} ${TEAM_FLAGS[f.awayTeam]}`)
+  if (leaderboard.length === 0) {
+    return [
+      '⚽ World Cup 2026 — USA, Canada & Mexico',
+      '🏆 Family Predictor Tournament is underway',
+      '📊 Predictions locked — results coming soon',
+      '🌍 48 teams · 12 groups · 72 matches',
+      '🃏 Jokers in play — could be worth double at any moment',
+    ]
   }
 
-  // Exact score hits
+  const leader = leaderboard[0]
+  const bottom = leaderboard[leaderboard.length - 1]
+  const second = leaderboard[1]
+
+  // ── Leader shoutout
+  if (leader) {
+    items.push(pick([
+      `🏆 ${leader.name} sitting pretty at the top with ${leader.total} points — can anyone catch them?`,
+      `👑 ${leader.name} leads the pack on ${leader.total} points. The one to beat.`,
+      `📈 ${leader.name} is running away with this — ${leader.total} points and counting`,
+    ]))
+  }
+
+  // ── Gap between 1st and 2nd
+  if (leader && second) {
+    const gap = leader.total - second.total
+    if (gap === 0) {
+      items.push(`🔥 It's LEVEL at the top — ${leader.name} and ${second.name} tied on ${leader.total} points. Every game counts now`)
+    } else if (gap <= 3) {
+      items.push(pick([
+        `⚡ Breathtakingly close — ${leader.name} leads ${second.name} by just ${gap} point${gap === 1 ? '' : 's'}`,
+        `😬 Only ${gap} point${gap === 1 ? '' : 's'} between ${leader.name} and ${second.name}. This one's not over`,
+      ]))
+    } else {
+      items.push(`📊 ${leader.name} holds a ${gap}-point lead over ${second.name} in second place`)
+    }
+  }
+
+  // ── Bottom of the table
+  if (bottom && bottom.id !== leader?.id) {
+    if (bottom.total === 0 && results.length > 0) {
+      items.push(pick([
+        `😬 ${bottom.name} yet to get off the mark — still waiting for that first point`,
+        `📉 Tough times for ${bottom.name} — no points on the board yet`,
+        `🙈 ${bottom.name} struggling at the foot of the table. Surely a comeback is coming...`,
+      ]))
+    } else if (bottom.total > 0) {
+      const gap = leader.total - bottom.total
+      items.push(pick([
+        `⛰️ ${bottom.name} has a mountain to climb — ${gap} points off the lead`,
+        `📉 ${bottom.name} rooted to the bottom on ${bottom.total} points. Time to turn it around`,
+        `💪 ${bottom.name} not giving up — but ${gap} points is a big ask`,
+      ]))
+    }
+  }
+
+  // ── Exact score hits (correct scores)
   for (const p of leaderboard) {
     for (const pred of (predsByParticipant[p.id] || [])) {
       const result = resultsMap[pred.fixture_id]
       if (!result) continue
       const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
-      if (scored.label === 'S' || scored.label === 'SJ') {
-        const f = fixtures.find(x => x.id === pred.fixture_id)
-        if (f) items.push(`🎯 ${p.name} nailed the exact score${pred.is_joker ? ' 🃏 JOKER' : ''}: ${f.homeTeam} ${pred.home_score}–${pred.away_score} ${f.awayTeam} (+${scored.points}pts)`)
+      const f = fixtures.find(x => x.id === pred.fixture_id)
+      if (!f) continue
+
+      if (scored.label === 'SJ') {
+        items.push(pick([
+          `💰 JACKPOT! ${p.name} played the Joker on ${f.homeTeam} vs ${f.awayTeam} AND got the exact score — a massive ${scored.points} points!`,
+          `🃏🎯 ${p.name}'s Joker pays off in style — correct score on ${f.homeTeam} vs ${f.awayTeam} worth ${scored.points} points!`,
+          `🔥 Massive points haul for ${p.name} — Joker + exact score on ${f.homeTeam} vs ${f.awayTeam}. ${scored.points} points in the bank`,
+        ]))
+      } else if (scored.label === 'S') {
+        items.push(pick([
+          `🎯 ${p.name} called it perfectly — ${f.homeTeam} ${pred.home_score}–${pred.away_score} ${f.awayTeam}. Five points, just like that`,
+          `🔮 Psychic! ${p.name} got the exact score on ${f.homeTeam} vs ${f.awayTeam} (+${scored.points}pts)`,
+          `⭐ Pinpoint prediction from ${p.name} — ${f.homeTeam} ${pred.home_score}–${pred.away_score} ${f.awayTeam} nailed it`,
+        ]))
       }
     }
   }
 
-  // Streaks without a point
+  // ── Joker correct result (RJ)
+  for (const p of leaderboard) {
+    for (const pred of (predsByParticipant[p.id] || [])) {
+      const result = resultsMap[pred.fixture_id]
+      if (!result) continue
+      const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      const f = fixtures.find(x => x.id === pred.fixture_id)
+      if (!f) continue
+      if (scored.label === 'RJ') {
+        items.push(pick([
+          `🃏 ${p.name}'s Joker on ${f.homeTeam} vs ${f.awayTeam} pays off — correct result bags them ${scored.points} points`,
+          `💚 ${p.name} gets the result right with a Joker on ${f.homeTeam} vs ${f.awayTeam} — ${scored.points} points well earned`,
+        ]))
+      }
+    }
+  }
+
+  // ── Dry spells (streak without a point)
   for (const p of leaderboard) {
     let streak = 0
     for (const pred of [...(predsByParticipant[p.id] || [])].reverse()) {
@@ -658,20 +739,54 @@ function generateTickerItems(
       if (scored.points === 0) streak++
       else break
     }
-    if (streak >= 3) items.push(`📉 ${p.name} is on ${streak} fixtures without a point`)
+    if (streak >= 3) {
+      items.push(pick([
+        `🥶 ${p.name} is going through a rough patch — ${streak} games without a single point`,
+        `😤 ${p.name} can't catch a break — ${streak} straight blanks and counting`,
+        `📉 Form crisis for ${p.name} — ${streak} fixtures and nothing to show for it`,
+      ]))
+    }
   }
 
-  // Top 3 leaderboard
-  const top3 = leaderboard.slice(0, 3)
-  if (top3.length > 0) items.push(`🏆 Top 3: ${top3.map((p, i) => `${i + 1}. ${p.name} ${p.total}pts`).join(' · ')}`)
+  // ── Someone on a hot streak
+  for (const p of leaderboard) {
+    let streak = 0
+    for (const pred of [...(predsByParticipant[p.id] || [])].reverse()) {
+      const result = resultsMap[pred.fixture_id]
+      if (!result) continue
+      const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      if (scored.points > 0) streak++
+      else break
+    }
+    if (streak >= 4) {
+      items.push(pick([
+        `🔥 ${p.name} is on fire — points in ${streak} consecutive games`,
+        `📈 ${p.name} on a ${streak}-game scoring streak. Unstoppable right now`,
+      ]))
+    }
+  }
 
-  // Fallback
-  if (items.length === 0) return [
-    '⚽ World Cup 2026 — USA, Canada & Mexico', '🏆 Family Predictor Tournament', '📊 Predictions locked — results updating live',
-    '🌍 48 teams · 12 groups · 72 matches', '🃏 Use your jokers wisely — double points await',
-  ]
+  // ── Recent match results (last 6)
+  for (const result of [...results].reverse().slice(0, 6)) {
+    const f = fixtures.find(x => x.id === result.fixture_id)
+    if (!f) continue
+    const home = result.home_score, away = result.away_score
+    let flavour = ''
+    const diff = Math.abs(home - away)
+    if (diff >= 4) flavour = pick([' — what a hammering!', ' — absolutely clinical', ' — no contest'])
+    else if (diff === 0) flavour = pick([' — honours even', ' — a point each', ' — all square'])
+    else if (diff === 1) flavour = pick([' — a nervy one', ' — tight as you like', ' — couldn\'t separate them'])
+    items.push(`${TEAM_FLAGS[f.homeTeam]} ${f.homeTeam} ${home}–${away} ${f.awayTeam} ${TEAM_FLAGS[f.awayTeam]}${flavour}`)
+  }
 
-  return items
+  // ── Overall stats summary
+  const totalCorrectScores = leaderboard.reduce((sum, p) => sum + p.s + p.sj, 0)
+  if (totalCorrectScores > 0) {
+    items.push(`🎯 ${totalCorrectScores} exact scores predicted correctly across the whole tournament so far`)
+  }
+
+  // ── Shuffle so it doesn't repeat the same order every load
+  return items.sort(() => Math.random() - 0.5)
 }
 
 // ─── Fixture Card (collapsible) ───────────────────────────────────────────────
