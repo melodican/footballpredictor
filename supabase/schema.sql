@@ -56,19 +56,22 @@ alter table predictions enable row level security;
 alter table results enable row level security;
 alter table tournament_settings enable row level security;
 
--- Participants: anyone can insert (submit entry), only revealed if predictions_revealed
+-- Participants
 create policy "anyone can submit" on participants for insert to anon with check (true);
 create policy "anyone can read" on participants for select to anon using (true);
+create policy "anon can delete participants" on participants for delete to anon using (true);
 
--- Predictions: anyone can insert their own, read all (filtered by app)
+-- Predictions
 create policy "anyone can insert predictions" on predictions for insert to anon with check (true);
 create policy "anyone can read predictions" on predictions for select to anon using (true);
+create policy "anon can delete predictions" on predictions for delete to anon using (true);
 
--- Results: read-only for public
+-- Results
 create policy "anyone can read results" on results for select to anon using (true);
 create policy "anon can insert results" on results for insert to anon with check (true);
 create policy "anon can update results" on results for update to anon using (true);
+create policy "anon can delete results" on results for delete to anon using (true);
 
--- Tournament settings: read-only for public
+-- Tournament settings
 create policy "anyone can read settings" on tournament_settings for select to anon using (true);
 create policy "anon can update settings" on tournament_settings for update to anon using (true);
