@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS } from '../data/fixtures'
-import { scoreFixture, labelColor } from '../lib/scoring'
+import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
+import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group } from '../types'
 import { GROUPS } from '../types'
 
@@ -59,28 +59,76 @@ export default function DashboardPage() {
     return m
   }, [predictions])
 
+  // Actual group winners — only set once all 6 results are in for that group
+  const actualGroupWinners = useMemo(() => {
+    const winners: Record<Group, string | null> = {} as Record<Group, string | null>
+    for (const g of GROUPS) {
+      const fixtures = FIXTURES_BY_GROUP[g]
+      const allIn = fixtures.every(f => resultsMap[f.id])
+      if (!allIn) { winners[g] = null; continue }
+      const scores: Record<string, { home: number; away: number }> = {}
+      for (const f of fixtures) {
+        const r = resultsMap[f.id]
+        if (r) scores[f.id] = { home: r.home_score, away: r.away_score }
+      }
+      const standings = calculateGroupStandings(GROUP_TEAMS[g], fixtures, scores)
+      winners[g] = standings[0]?.team ?? null
+    }
+    return winners
+  }, [resultsMap])
+
+  // Predicted group winner per participant per group
+  const predictedGroupWinners = useMemo(() => {
+    const result: Record<string, Record<Group, string>> = {}
+    for (const participant of participants) {
+      const preds = predsByParticipant[participant.id] || []
+      const predMap: Record<string, { home: number; away: number }> = {}
+      for (const p of preds) predMap[p.fixture_id] = { home: p.home_score, away: p.away_score }
+
+      result[participant.id] = {} as Record<Group, string>
+      for (const g of GROUPS) {
+        const fixtures = FIXTURES_BY_GROUP[g]
+        const standings = calculateGroupStandings(GROUP_TEAMS[g], fixtures, predMap)
+        result[participant.id][g] = standings[0]?.team ?? ''
+      }
+    }
+    return result
+  }, [participants, predsByParticipant])
+
   const leaderboard = useMemo(() => {
     return participants
       .map(p => {
         const preds = predsByParticipant[p.id] || []
-        let total = 0
+        let matchPoints = 0
         for (const pred of preds) {
           const result = resultsMap[pred.fixture_id]
           if (!result) continue
-          total += scoreFixture(
+          matchPoints += scoreFixture(
             { home: pred.home_score, away: pred.away_score },
             { home: result.home_score, away: result.away_score },
             pred.is_joker,
           ).points
         }
-        return { ...p, total }
+
+        // Group winner bonus points
+        let groupWinnerPoints = 0
+        const myWinners = predictedGroupWinners[p.id] || {}
+        for (const g of GROUPS) {
+          if (actualGroupWinners[g] && myWinners[g] === actualGroupWinners[g]) {
+            groupWinnerPoints += GROUP_WINNER_POINTS
+          }
+        }
+
+        return { ...p, matchPoints, groupWinnerPoints, total: matchPoints + groupWinnerPoints }
       })
       .sort((a, b) => b.total - a.total)
-  }, [participants, predsByParticipant, resultsMap])
+  }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
 
   const filteredFixtures = activeGroup === 'played'
     ? FIXTURES.filter(f => resultsMap[f.id] !== undefined)
     : FIXTURES_BY_GROUP[activeGroup]
+
+  const groupsCompleted = GROUPS.filter(g => actualGroupWinners[g] !== null).length
 
   if (loading) {
     return (
@@ -94,7 +142,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white pb-16">
-      {/* Background glow */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-amber-500/6 rounded-full blur-3xl" />
       </div>
@@ -109,44 +156,34 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 mt-1 text-xs text-zinc-500 font-medium">
               <span>👥 {participants.length} players</span>
               <span>🎯 {results.length} results in</span>
-              {!revealed && (
-                <span className="text-amber-400/70">🔒 Hidden until entries close</span>
-              )}
+              {groupsCompleted > 0 && <span>🏁 {groupsCompleted}/12 groups complete</span>}
+              {!revealed && <span className="text-amber-400/70">🔒 Hidden until entries close</span>}
             </div>
           </div>
-          {(settings?.entries_open) && (
-            <a href="/enter" className="btn-gold text-xs font-bold px-4 py-2 rounded-xl">
-              Enter →
-            </a>
+          {settings?.entries_open && (
+            <a href="/enter" className="btn-gold text-xs font-bold px-4 py-2 rounded-xl">Enter →</a>
           )}
         </div>
       </div>
 
       <div className="relative max-w-4xl mx-auto px-5 mt-6 space-y-6">
 
-        {/* Pre-reveal: just show who has entered */}
         {!revealed && (
           <div className="glass rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Players entered</h2>
-              <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">
-                {participants.length} entries
-              </span>
+              <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">{participants.length} entries</span>
             </div>
             {participants.length === 0 ? (
               <p className="text-zinc-500 text-sm">No entries yet.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {participants.map(p => (
-                  <div key={p.id} className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-full text-sm font-semibold">
-                    {p.name}
-                  </div>
+                  <div key={p.id} className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-full text-sm font-semibold">{p.name}</div>
                 ))}
               </div>
             )}
-            <p className="text-xs text-zinc-600 pt-1">
-              Predictions are hidden until the entry window closes.
-            </p>
+            <p className="text-xs text-zinc-600 pt-1">Predictions are hidden until the entry window closes.</p>
           </div>
         )}
 
@@ -156,7 +193,10 @@ export default function DashboardPage() {
             <div className="glass rounded-3xl overflow-hidden">
               <div className="px-6 py-4 border-b border-white/6 flex items-center justify-between">
                 <h2 className="font-black text-lg">🏆 Leaderboard</h2>
-                <span className="text-xs text-zinc-500">{results.length} results in</span>
+                <div className="text-xs text-zinc-500 flex items-center gap-3">
+                  <span>{results.length} results in</span>
+                  {groupsCompleted > 0 && <span className="text-amber-400">{groupsCompleted} groups done (+5pts each)</span>}
+                </div>
               </div>
               <div className="divide-y divide-white/5">
                 {leaderboard.map((p, i) => (
@@ -166,18 +206,25 @@ export default function DashboardPage() {
                       i === 1 ? 'bg-zinc-300 text-zinc-900' :
                       i === 2 ? 'bg-amber-700 text-white' :
                       'bg-zinc-800 text-zinc-400'
-                    }`}>
-                      {i + 1}
-                    </div>
+                    }`}>{i + 1}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold truncate">{p.name}</div>
-                      <div className="text-xs text-zinc-500 truncate hidden sm:block">
-                        🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}
+                      <div className="text-xs text-zinc-500 truncate hidden sm:flex items-center gap-2">
+                        <span>🏆 {p.winner_pick}</span>
+                        <span>⚽ {p.top_scorer_pick}</span>
+                        {p.groupWinnerPoints > 0 && (
+                          <span className="text-amber-400">🏁 +{p.groupWinnerPoints} group bonus</span>
+                        )}
                       </div>
                     </div>
-                    <div className={`text-xl font-black ${i === 0 ? 'gradient-text' : 'text-white'}`}>
-                      {p.total}
-                      <span className="text-xs text-zinc-500 font-normal ml-1">pts</span>
+                    <div className="text-right">
+                      <div className={`text-xl font-black ${i === 0 ? 'gradient-text' : 'text-white'}`}>
+                        {p.total}
+                        <span className="text-xs text-zinc-500 font-normal ml-1">pts</span>
+                      </div>
+                      {p.groupWinnerPoints > 0 && (
+                        <div className="text-xs text-amber-400 font-semibold">{p.matchPoints} + {p.groupWinnerPoints}</div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -187,7 +234,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Group filter tabs */}
+            {/* Group filter */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               <FilterTab label="Results so far" active={activeGroup === 'played'} onClick={() => setActiveGroup('played')} />
               {GROUPS.map(g => (
@@ -246,7 +293,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="glass rounded-2xl px-6 py-10 text-center text-zinc-500 text-sm">
-                {activeGroup === 'played' ? 'No results entered yet.' : `No predictions to show for Group ${activeGroup}.`}
+                {activeGroup === 'played' ? 'No results entered yet.' : `No results yet for Group ${activeGroup}.`}
               </div>
             )}
 
@@ -254,7 +301,7 @@ export default function DashboardPage() {
             <div className="glass rounded-3xl overflow-hidden">
               <div className="px-6 py-4 border-b border-white/6">
                 <h2 className="font-black text-lg">All Predictions</h2>
-                <p className="text-zinc-500 text-xs mt-0.5">Tap a player to expand their full predictions</p>
+                <p className="text-zinc-500 text-xs mt-0.5">Tap a player to see their full picks + group winner predictions</p>
               </div>
               <div className="divide-y divide-white/5">
                 {leaderboard.map(p => (
@@ -267,14 +314,21 @@ export default function DashboardPage() {
                         <div className="font-bold">{p.name}</div>
                         <div className="text-xs text-zinc-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
                       </div>
-                      <div className="font-black text-amber-400">{p.total} pts</div>
-                      <div className="text-zinc-600 text-xs">{expandedParticipant === p.id ? '▲' : '▼'}</div>
+                      <div className="text-right">
+                        <div className="font-black text-amber-400">{p.total} pts</div>
+                        {p.groupWinnerPoints > 0 && (
+                          <div className="text-xs text-amber-500">{p.matchPoints} + {p.groupWinnerPoints}</div>
+                        )}
+                      </div>
+                      <div className="text-zinc-600 text-xs ml-1">{expandedParticipant === p.id ? '▲' : '▼'}</div>
                     </button>
                     {expandedParticipant === p.id && (
                       <ParticipantDetail
                         participant={p}
                         preds={predsByParticipant[p.id] || []}
                         resultsMap={resultsMap}
+                        predictedWinners={predictedGroupWinners[p.id] || {} as Record<Group, string>}
+                        actualWinners={actualGroupWinners}
                       />
                     )}
                   </div>
@@ -288,15 +342,80 @@ export default function DashboardPage() {
   )
 }
 
+// ─── Participant Detail ───────────────────────────────────────────────────────
+
 function ParticipantDetail({
-  participant, preds, resultsMap,
-}: { participant: Participant; preds: Prediction[]; resultsMap: Record<string, Result> }) {
+  participant, preds, resultsMap, predictedWinners, actualWinners,
+}: {
+  participant: Participant
+  preds: Prediction[]
+  resultsMap: Record<string, Result>
+  predictedWinners: Record<Group, string>
+  actualWinners: Record<Group, string | null>
+}) {
   const predMap: Record<string, Prediction> = {}
   for (const p of preds) predMap[p.fixture_id] = p
 
+  const correctWinners = GROUPS.filter(g => actualWinners[g] && predictedWinners[g] === actualWinners[g]).length
+  const pendingWinners = GROUPS.filter(g => !actualWinners[g]).length
+
   return (
-    <div className="bg-zinc-950/60 px-6 pb-5">
+    <div className="bg-zinc-950/60 px-6 pb-6">
       <div className="text-xs text-emerald-400 py-2 font-semibold">⚽ Top scorer: {participant.top_scorer_pick}</div>
+
+      {/* Group Winners Section */}
+      <div className="mb-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">Predicted Group Winners</h3>
+          <div className="text-xs text-zinc-500">
+            {correctWinners > 0 && <span className="text-amber-400 font-bold">+{correctWinners * GROUP_WINNER_POINTS} pts </span>}
+            {correctWinners}/{12 - pendingWinners} correct
+            {pendingWinners > 0 && <span className="text-zinc-600"> · {pendingWinners} pending</span>}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          {GROUPS.map(g => {
+            const predicted = predictedWinners[g]
+            const actual = actualWinners[g]
+            const isCorrect = actual && predicted === actual
+            const isWrong = actual && predicted !== actual
+            const isPending = !actual
+
+            return (
+              <div
+                key={g}
+                className={`rounded-xl p-2.5 border text-xs transition ${
+                  isCorrect
+                    ? 'bg-amber-400/15 border-amber-400/40'
+                    : isWrong
+                    ? 'bg-zinc-900 border-zinc-800'
+                    : 'bg-zinc-900 border-zinc-800'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-black text-zinc-400">Group {g}</span>
+                  {isCorrect && <span className="text-amber-400 font-black text-xs">+{GROUP_WINNER_POINTS}</span>}
+                  {isPending && <span className="text-zinc-600 text-xs">•••</span>}
+                </div>
+                <div className={`font-bold flex items-center gap-1 ${
+                  isCorrect ? 'text-amber-300' : isWrong ? 'text-zinc-400 line-through' : 'text-white'
+                }`}>
+                  <span>{TEAM_FLAGS[predicted] || '?'}</span>
+                  <span className="truncate text-xs">{predicted || '—'}</span>
+                </div>
+                {isWrong && actual && (
+                  <div className="text-emerald-400 text-xs mt-0.5 flex items-center gap-1">
+                    <span>{TEAM_FLAGS[actual]}</span>
+                    <span className="truncate">{actual}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Match predictions per group */}
       {GROUPS.map(g => (
         <div key={g} className="mt-3">
           <div className="text-xs font-black text-amber-400 mb-1.5">GROUP {g}</div>
