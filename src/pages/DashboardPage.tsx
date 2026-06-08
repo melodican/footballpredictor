@@ -1,11 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group } from '../types'
 import { GROUPS } from '../types'
 
+const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
+
 export default function DashboardPage() {
+  const [searchParams] = useSearchParams()
+  const isPreview = searchParams.get('preview') === ADMIN_SECRET
   const [settings, setSettings] = useState<TournamentSettings | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
@@ -138,13 +143,20 @@ export default function DashboardPage() {
     )
   }
 
-  const revealed = settings?.predictions_revealed ?? false
+  const revealed = isPreview || (settings?.predictions_revealed ?? false)
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white pb-16">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-amber-500/6 rounded-full blur-3xl" />
       </div>
+
+      {/* Preview mode banner — only visible to admin */}
+      {isPreview && (
+        <div className="bg-amber-400 text-black text-xs font-black text-center py-1.5 px-4 tracking-wide">
+          👁 ADMIN PREVIEW — only you can see this view · public dashboard is still locked
+        </div>
+      )}
 
       {/* Header */}
       <div className="relative border-b border-zinc-800/60 px-5 py-5">
