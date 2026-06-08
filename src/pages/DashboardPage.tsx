@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
-import type { Participant, Prediction, Result, TournamentSettings, Group } from '../types'
+import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture } from '../types'
 import { GROUPS } from '../types'
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
@@ -276,51 +276,15 @@ export default function DashboardPage() {
             {/* Fixture grid */}
             {filteredFixtures.length > 0 ? (
               <div className="space-y-3">
-                {filteredFixtures.map(fixture => {
-                  const result = resultsMap[fixture.id]
-                  return (
-                    <div key={fixture.id} className="ss-card overflow-hidden">
-                      <div className="px-5 py-3 bg-blue-950/80 flex items-center justify-between border-b border-blue-900">
-                        <div className="text-sm font-bold">
-                          {TEAM_FLAGS[fixture.homeTeam]} {fixture.homeTeam}
-                          <span className="text-blue-400 mx-2">vs</span>
-                          {fixture.awayTeam} {TEAM_FLAGS[fixture.awayTeam]}
-                        </div>
-                        {result ? (
-                          <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-black text-sm px-3 py-1 rounded-full">
-                            {result.home_score} – {result.away_score}
-                          </div>
-                        ) : (
-                          <div className="text-blue-600 text-xs">Pending</div>
-                        )}
-                      </div>
-                      <div className="divide-y divide-blue-900/40">
-                        {leaderboard.map(participant => {
-                          const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === fixture.id)
-                          if (!pred) return null
-                          const scored = result
-                            ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
-                            : null
-                          return (
-                            <div key={participant.id} className="px-5 py-2 flex items-center gap-3">
-                              <div className="w-28 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
-                              <div className="flex items-center gap-1.5 flex-1">
-                                <span className="text-sm font-black">{pred.home_score} – {pred.away_score}</span>
-                                {pred.is_joker && <span className="text-yellow-400 text-xs font-black bg-yellow-400/10 px-1.5 rounded">★J</span>}
-                              </div>
-                              {scored && (
-                                <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${labelColor(scored.label)}`}>
-                                  {scored.label === null ? '–' : scored.label}
-                                  {scored.points > 0 && ` +${scored.points}`}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
+                {filteredFixtures.map(fixture => (
+                  <FixtureCard
+                    key={fixture.id}
+                    fixture={fixture}
+                    result={resultsMap[fixture.id]}
+                    leaderboard={leaderboard}
+                    predsByParticipant={predsByParticipant}
+                  />
+                ))}
               </div>
             ) : (
               <div className="ss-card px-6 py-10 text-center text-blue-500 text-sm">
@@ -708,6 +672,108 @@ function generateTickerItems(
   ]
 
   return items
+}
+
+// ─── Fixture Card (collapsible) ───────────────────────────────────────────────
+
+function outcomeLabel(label: ScoredFixture['label'], isJoker: boolean): string {
+  if (label === 'S') return 'Correct Score'
+  if (label === 'SJ') return 'Correct Score' + (isJoker ? ' 🃏' : '')
+  if (label === 'R') return 'Correct Result'
+  if (label === 'RJ') return 'Correct Result' + (isJoker ? ' 🃏' : '')
+  if (label === '/') return 'No points'
+  return '–'
+}
+
+function outcomeBg(label: ScoredFixture['label']): string {
+  if (label === 'S' || label === 'SJ') return 'text-yellow-400'
+  if (label === 'R' || label === 'RJ') return 'text-emerald-400'
+  return 'text-blue-600'
+}
+
+function FixtureCard({ fixture, result, leaderboard, predsByParticipant }: {
+  fixture: typeof FIXTURES[number]
+  result: Result | undefined
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+}) {
+  const [open, setOpen] = useState(false)
+
+  // Build rows with scores, sort by points desc
+  const rows = leaderboard
+    .map(participant => {
+      const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === fixture.id)
+      if (!pred) return null
+      const scored = result
+        ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+        : null
+      return { participant, pred, scored }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b!.scored?.points ?? 0) - (a!.scored?.points ?? 0)) as Array<{
+      participant: PlayerRow
+      pred: Prediction
+      scored: ScoredFixture | null
+    }>
+
+  return (
+    <div className="ss-card overflow-hidden">
+      {/* Header — always visible, click to expand */}
+      <button
+        className="w-full px-5 py-3 bg-blue-950/80 flex items-center justify-between border-b border-blue-900 hover:bg-blue-900/50 transition"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="text-sm font-bold text-left">
+          {TEAM_FLAGS[fixture.homeTeam]} {fixture.homeTeam}
+          <span className="text-blue-400 mx-2">vs</span>
+          {fixture.awayTeam} {TEAM_FLAGS[fixture.awayTeam]}
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {result ? (
+            <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-black text-sm px-3 py-1 rounded-full">
+              {result.home_score} – {result.away_score}
+            </div>
+          ) : (
+            <div className="text-blue-600 text-xs">Pending</div>
+          )}
+          <span className="text-blue-500 text-xs">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {/* Expandable predictions */}
+      {open && (
+        <div className="divide-y divide-blue-900/40">
+          {/* Column headers */}
+          <div className="px-5 py-1.5 flex items-center gap-3 bg-blue-950/40">
+            <div className="w-28 text-xs font-black text-blue-500 uppercase tracking-wider">Player</div>
+            <div className="w-14 text-xs font-black text-blue-500 uppercase tracking-wider text-center">Pick</div>
+            <div className="flex-1 text-xs font-black text-blue-500 uppercase tracking-wider">Outcome</div>
+            <div className="w-12 text-xs font-black text-blue-500 uppercase tracking-wider text-right">Pts</div>
+          </div>
+          {rows.map(({ participant, pred, scored }) => (
+            <div key={participant.id} className="px-5 py-2.5 flex items-center gap-3">
+              <div className="w-28 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
+              <div className="w-14 text-center">
+                <span className="text-sm font-black text-white">{pred.home_score}–{pred.away_score}</span>
+              </div>
+              <div className={`flex-1 text-sm font-semibold ${scored ? outcomeBg(scored.label) : 'text-blue-600'}`}>
+                {scored ? outcomeLabel(scored.label, pred.is_joker) : '–'}
+              </div>
+              <div className="w-12 text-right">
+                {scored && scored.points > 0 ? (
+                  <span className="text-white font-black text-sm">+{scored.points}</span>
+                ) : scored ? (
+                  <span className="text-blue-700 font-bold text-sm">0</span>
+                ) : (
+                  <span className="text-blue-700 text-sm">–</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
