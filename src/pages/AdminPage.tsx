@@ -34,7 +34,11 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
   const [message, setMessage] = useState('')
-  const [tab, setTab] = useState<'results' | 'settings'>('results')
+  const [tab, setTab] = useState<'results' | 'settings' | 'scorers'>('results')
+  const [scorerGoals, setScorerGoals] = useState<Record<string, string>>({})
+  const [savingScorers, setSavingScorers] = useState(false)
+  const [topScorerPicks, setTopScorerPicks] = useState<Array<{ name: string; count: number }>>([])
+
 
   async function load() {
     const [sRes, rRes, pRes] = await Promise.all([
@@ -42,7 +46,20 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
       supabase.from('results').select('*'),
       supabase.from('participants').select('id', { count: 'exact', head: true }),
     ])
-    if (sRes.data) setSettings(sRes.data as TournamentSettings)
+    if (sRes.data) {
+      setSettings(sRes.data as TournamentSettings)
+      const goals = (sRes.data as Record<string, unknown>).scorer_goals as Record<string, number> ?? {}
+      const m: Record<string, string> = {}
+      for (const [k, v] of Object.entries(goals)) m[k] = String(v)
+      setScorerGoals(m)
+    }
+    // Load top scorer picks
+    const pRes2 = await supabase.from('participants').select('top_scorer_pick')
+    if (pRes2.data) {
+      const counts: Record<string, number> = {}
+      for (const row of pRes2.data) counts[row.top_scorer_pick] = (counts[row.top_scorer_pick] || 0) + 1
+      setTopScorerPicks(Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })))
+    }
     if (rRes.data) {
       setSavedResults(rRes.data as Result[])
       const m: Record<string, { home: string; away: string }> = {}
@@ -118,15 +135,15 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-1">
-          {(['results', 'settings'] as const).map(t => (
+          {([['results', '⚽ Results'], ['scorers', '🏅 Scorers'], ['settings', '⚙️ Settings']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition capitalize ${
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${
                 tab === t ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              {t === 'results' ? '⚽ Enter Results' : '⚙️ Settings'}
+              {label}
             </button>
           ))}
         </div>
@@ -152,6 +169,52 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
               <p className="font-bold text-white">Phase</p>
               <p className="text-zinc-400">Currently: <span className="text-white font-semibold">{settings.current_phase}</span></p>
               <p className="text-zinc-600 text-xs mt-1">Knockout phase management coming in Phase 2.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Top Scorer Goals */}
+        {tab === 'scorers' && (
+          <div className="space-y-4">
+            <div className="glass rounded-2xl p-5">
+              <h3 className="font-bold text-white mb-1">Top Scorer Race</h3>
+              <p className="text-zinc-400 text-xs mb-4">Update goal tallies for players your family have picked as top scorer. These show on the live dashboard.</p>
+              <div className="space-y-3">
+                {topScorerPicks.map(({ name, count }) => (
+                  <div key={name} className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm">{name}</div>
+                      <div className="text-xs text-zinc-500">{count} player{count !== 1 ? 's' : ''} backing them</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setScorerGoals(prev => ({ ...prev, [name]: String(Math.max(0, (parseInt(prev[name] || '0') || 0) - 1)) }))}
+                        className="w-8 h-8 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-bold text-lg flex items-center justify-center transition"
+                      >−</button>
+                      <span className="w-8 text-center font-black text-lg text-yellow-400">{scorerGoals[name] || '0'}</span>
+                      <button
+                        onClick={() => setScorerGoals(prev => ({ ...prev, [name]: String((parseInt(prev[name] || '0') || 0) + 1) }))}
+                        className="w-8 h-8 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-bold text-lg flex items-center justify-center transition"
+                      >+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                disabled={savingScorers}
+                onClick={async () => {
+                  setSavingScorers(true)
+                  const goals: Record<string, number> = {}
+                  for (const [k, v] of Object.entries(scorerGoals)) goals[k] = parseInt(v) || 0
+                  await supabase.from('tournament_settings').update({ scorer_goals: goals }).eq('id', 1)
+                  setSavingScorers(false)
+                  setMessage('✓ Goal tallies updated!')
+                  setTimeout(() => setMessage(''), 3000)
+                }}
+                className="btn-gold w-full mt-5 py-3 rounded-xl"
+              >
+                {savingScorers ? 'Saving…' : 'Save Goal Tallies'}
+              </button>
             </div>
           </div>
         )}

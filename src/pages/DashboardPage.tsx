@@ -8,10 +8,22 @@ import { GROUPS } from '../types'
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PlayerRow extends Participant {
+  total: number
+  matchPoints: number
+  groupWinnerPoints: number
+  s: number; sj: number; r: number; rj: number; played: number
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const [searchParams] = useSearchParams()
   const isPreview = searchParams.get('preview') === ADMIN_SECRET
-  const [settings, setSettings] = useState<TournamentSettings | null>(null)
+
+  const [settings, setSettings] = useState<TournamentSettings & { scorer_goals?: Record<string, number> } | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [results, setResults] = useState<Result[]>([])
@@ -26,7 +38,7 @@ export default function DashboardPage() {
       supabase.from('predictions').select('*'),
       supabase.from('results').select('*'),
     ])
-    if (sRes.data) setSettings(sRes.data as TournamentSettings)
+    if (sRes.data) setSettings(sRes.data as TournamentSettings & { scorer_goals?: Record<string, number> })
     if (pRes.data) setParticipants(pRes.data as Participant[])
     if (predRes.data) setPredictions(predRes.data as Prediction[])
     if (rRes.data) setResults(rRes.data as Result[])
@@ -36,15 +48,12 @@ export default function DashboardPage() {
   useEffect(() => {
     load()
     const channel = supabase.channel('dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => {
-        supabase.from('results').select('*').then(({ data }) => { if (data) setResults(data as Result[]) })
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'participants' }, () => {
-        supabase.from('participants').select('*').order('submitted_at').then(({ data }) => { if (data) setParticipants(data as Participant[]) })
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_settings' }, () => {
-        supabase.from('tournament_settings').select('*').eq('id', 1).single().then(({ data }) => { if (data) setSettings(data as TournamentSettings) })
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () =>
+        supabase.from('results').select('*').then(({ data }) => { if (data) setResults(data as Result[]) }))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'participants' }, () =>
+        supabase.from('participants').select('*').order('submitted_at').then(({ data }) => { if (data) setParticipants(data as Participant[]) }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_settings' }, () =>
+        supabase.from('tournament_settings').select('*').eq('id', 1).single().then(({ data }) => { if (data) setSettings(data as TournamentSettings & { scorer_goals?: Record<string, number> }) }))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
@@ -64,7 +73,6 @@ export default function DashboardPage() {
     return m
   }, [predictions])
 
-  // Actual group winners — only set once all 6 results are in for that group
   const actualGroupWinners = useMemo(() => {
     const winners: Record<Group, string | null> = {} as Record<Group, string | null>
     for (const g of GROUPS) {
@@ -76,69 +84,89 @@ export default function DashboardPage() {
         const r = resultsMap[f.id]
         if (r) scores[f.id] = { home: r.home_score, away: r.away_score }
       }
-      const standings = calculateGroupStandings(GROUP_TEAMS[g], fixtures, scores)
-      winners[g] = standings[0]?.team ?? null
+      winners[g] = calculateGroupStandings(GROUP_TEAMS[g], fixtures, scores)[0]?.team ?? null
     }
     return winners
   }, [resultsMap])
 
-  // Predicted group winner per participant per group
   const predictedGroupWinners = useMemo(() => {
     const result: Record<string, Record<Group, string>> = {}
     for (const participant of participants) {
       const preds = predsByParticipant[participant.id] || []
       const predMap: Record<string, { home: number; away: number }> = {}
       for (const p of preds) predMap[p.fixture_id] = { home: p.home_score, away: p.away_score }
-
       result[participant.id] = {} as Record<Group, string>
       for (const g of GROUPS) {
-        const fixtures = FIXTURES_BY_GROUP[g]
-        const standings = calculateGroupStandings(GROUP_TEAMS[g], fixtures, predMap)
+        const standings = calculateGroupStandings(GROUP_TEAMS[g], FIXTURES_BY_GROUP[g], predMap)
         result[participant.id][g] = standings[0]?.team ?? ''
       }
     }
     return result
   }, [participants, predsByParticipant])
 
-  const leaderboard = useMemo(() => {
-    return participants
-      .map(p => {
-        const preds = predsByParticipant[p.id] || []
-        let matchPoints = 0
-        for (const pred of preds) {
-          const result = resultsMap[pred.fixture_id]
-          if (!result) continue
-          matchPoints += scoreFixture(
-            { home: pred.home_score, away: pred.away_score },
-            { home: result.home_score, away: result.away_score },
-            pred.is_joker,
-          ).points
-        }
-
-        // Group winner bonus points
-        let groupWinnerPoints = 0
-        const myWinners = predictedGroupWinners[p.id] || {}
-        for (const g of GROUPS) {
-          if (actualGroupWinners[g] && myWinners[g] === actualGroupWinners[g]) {
-            groupWinnerPoints += GROUP_WINNER_POINTS
-          }
-        }
-
-        return { ...p, matchPoints, groupWinnerPoints, total: matchPoints + groupWinnerPoints }
-      })
-      .sort((a, b) => b.total - a.total)
+  const leaderboard: PlayerRow[] = useMemo(() => {
+    return participants.map(p => {
+      const preds = predsByParticipant[p.id] || []
+      let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0
+      for (const pred of preds) {
+        const result = resultsMap[pred.fixture_id]
+        if (!result) continue
+        played++
+        const scored = scoreFixture(
+          { home: pred.home_score, away: pred.away_score },
+          { home: result.home_score, away: result.away_score },
+          pred.is_joker,
+        )
+        matchPoints += scored.points
+        if (scored.label === 'S') s++
+        else if (scored.label === 'SJ') sj++
+        else if (scored.label === 'R') r++
+        else if (scored.label === 'RJ') rj++
+      }
+      let groupWinnerPoints = 0
+      const myWinners = predictedGroupWinners[p.id] || {}
+      for (const g of GROUPS) {
+        if (actualGroupWinners[g] && myWinners[g] === actualGroupWinners[g]) groupWinnerPoints += GROUP_WINNER_POINTS
+      }
+      return { ...p, matchPoints, groupWinnerPoints, total: matchPoints + groupWinnerPoints, s, sj, r, rj, played }
+    }).sort((a, b) => b.total - a.total)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
+
+  // Upcoming fixtures — next date with unplayed games
+  const upcomingFixtures = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const unplayedDates = [...new Set(FIXTURES.filter(f => !resultsMap[f.id]).map(f => f.date))].sort()
+    const nextDate = unplayedDates.find(d => d >= today) ?? unplayedDates[0]
+    if (!nextDate) return { date: '', fixtures: [] }
+    return { date: nextDate, fixtures: FIXTURES.filter(f => f.date === nextDate && !resultsMap[f.id]) }
+  }, [resultsMap])
+
+  // Ticker messages
+  const tickerItems = useMemo(() =>
+    generateTickerItems(leaderboard, results, resultsMap, predsByParticipant, FIXTURES),
+    [leaderboard, results, resultsMap, predsByParticipant])
+
+  // Top scorer race
+  const topScorerRace = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const p of participants) {
+      counts[p.top_scorer_pick] = (counts[p.top_scorer_pick] || 0) + 1
+    }
+    const goals = (settings?.scorer_goals as Record<string, number>) ?? {}
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, picked]) => ({ name, picked, goals: goals[name] ?? 0 }))
+  }, [participants, settings])
 
   const filteredFixtures = activeGroup === 'played'
     ? FIXTURES.filter(f => resultsMap[f.id] !== undefined)
     : FIXTURES_BY_GROUP[activeGroup]
 
-  const groupsCompleted = GROUPS.filter(g => actualGroupWinners[g] !== null).length
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-zinc-500 text-sm animate-pulse">Loading dashboard…</div>
+      <div className="min-h-screen bg-[#060d1f] flex items-center justify-center">
+        <div className="text-blue-400 text-sm animate-pulse">Loading dashboard…</div>
       </div>
     )
   }
@@ -146,136 +174,127 @@ export default function DashboardPage() {
   const revealed = isPreview || (settings?.predictions_revealed ?? false)
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-16">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-amber-500/6 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-[#060d1f] text-white pb-16">
 
-      {/* Preview mode banner — only visible to admin */}
+      {/* Preview banner */}
       {isPreview && (
-        <div className="bg-amber-400 text-black text-xs font-black text-center py-1.5 px-4 tracking-wide">
-          👁 ADMIN PREVIEW — only you can see this view · public dashboard is still locked
+        <div className="bg-yellow-400 text-black text-xs font-black text-center py-1.5 tracking-widest uppercase">
+          👁 Admin Preview — public dashboard is still locked
         </div>
       )}
 
+      {/* Ticker */}
+      <div className="bg-red-700 overflow-hidden border-b border-red-900">
+        <div className="flex items-center">
+          <div className="bg-red-900 text-white text-xs font-black px-3 py-2 uppercase tracking-widest whitespace-nowrap flex-shrink-0 border-r border-red-600">
+            ⚽ LIVE
+          </div>
+          <div className="overflow-hidden flex-1">
+            <div className="animate-ticker">
+              {tickerItems.map((item, i) => (
+                <span key={i} className="text-white text-xs font-semibold px-6 py-2 inline-block">
+                  {item}
+                </span>
+              ))}
+              {/* Duplicate for seamless loop */}
+              {tickerItems.map((item, i) => (
+                <span key={`dup-${i}`} className="text-white text-xs font-semibold px-6 py-2 inline-block">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="relative border-b border-zinc-800/60 px-5 py-5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="bg-[#040a17] border-b border-blue-900/60 px-5 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black tracking-tight">
-              <span className="gradient-text">WC2026</span> Predictor
+            <h1 className="text-2xl font-black tracking-tight">
+              <span className="gradient-text">WC2026</span>
+              <span className="text-white ml-2">Predictor</span>
             </h1>
-            <div className="flex items-center gap-4 mt-1 text-xs text-zinc-500 font-medium">
+            <div className="flex items-center gap-4 mt-1 text-xs text-blue-400 font-medium">
               <span>👥 {participants.length} players</span>
               <span>🎯 {results.length} results in</span>
-              {groupsCompleted > 0 && <span>🏁 {groupsCompleted}/12 groups complete</span>}
-              {!revealed && <span className="text-amber-400/70">🔒 Hidden until entries close</span>}
+              {!revealed && <span className="text-yellow-400">🔒 Predictions hidden</span>}
             </div>
           </div>
           {settings?.entries_open && (
-            <a href="/enter" className="btn-gold text-xs font-bold px-4 py-2 rounded-xl">Enter →</a>
+            <a href="/enter" className="btn-gold text-xs px-4 py-2 rounded-xl">Enter →</a>
           )}
         </div>
       </div>
 
-      <div className="relative max-w-4xl mx-auto px-5 mt-6 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 mt-5 space-y-5">
 
+        {/* Not revealed */}
         {!revealed && (
-          <div className="glass rounded-3xl p-6 space-y-4">
+          <div className="ss-card p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Players entered</h2>
-              <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">{participants.length} entries</span>
+              <span className="text-xs text-blue-400 bg-blue-900/40 px-2.5 py-1 rounded-full">{participants.length} entries</span>
             </div>
-            {participants.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No entries yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {participants.map(p => (
-                  <div key={p.id} className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-full text-sm font-semibold">{p.name}</div>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-zinc-600 pt-1">Predictions are hidden until the entry window closes.</p>
+            <div className="flex flex-wrap gap-2">
+              {participants.map(p => (
+                <div key={p.id} className="bg-blue-900/40 border border-blue-800 px-3 py-1.5 rounded-full text-sm font-semibold">{p.name}</div>
+              ))}
+            </div>
+            <p className="text-xs text-blue-600 pt-1">Predictions hidden until the entry window closes.</p>
           </div>
         )}
 
         {revealed && (
           <>
+            {/* Upcoming Fixtures */}
+            {upcomingFixtures.fixtures.length > 0 && (
+              <UpcomingFixturesSection
+                date={upcomingFixtures.date}
+                fixtures={upcomingFixtures.fixtures}
+                leaderboard={leaderboard}
+                predsByParticipant={predsByParticipant}
+              />
+            )}
+
+            {/* Top Scorer Race */}
+            {topScorerRace.length > 0 && (
+              <TopScorerRace race={topScorerRace} />
+            )}
+
             {/* Leaderboard */}
-            <div className="glass rounded-3xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/6 flex items-center justify-between">
-                <h2 className="font-black text-lg">🏆 Leaderboard</h2>
-                <div className="text-xs text-zinc-500 flex items-center gap-3">
-                  <span>{results.length} results in</span>
-                  {groupsCompleted > 0 && <span className="text-amber-400">{groupsCompleted} groups done (+5pts each)</span>}
-                </div>
-              </div>
-              <div className="divide-y divide-white/5">
-                {leaderboard.map((p, i) => (
-                  <div key={p.id} className="px-6 py-3.5 flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
-                      i === 0 ? 'bg-gradient-to-br from-amber-300 to-amber-600 text-black shadow-lg shadow-amber-500/30' :
-                      i === 1 ? 'bg-zinc-300 text-zinc-900' :
-                      i === 2 ? 'bg-amber-700 text-white' :
-                      'bg-zinc-800 text-zinc-400'
-                    }`}>{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold truncate">{p.name}</div>
-                      <div className="text-xs text-zinc-500 truncate hidden sm:flex items-center gap-2">
-                        <span>🏆 {p.winner_pick}</span>
-                        <span>⚽ {p.top_scorer_pick}</span>
-                        {p.groupWinnerPoints > 0 && (
-                          <span className="text-amber-400">🏁 +{p.groupWinnerPoints} group bonus</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-xl font-black ${i === 0 ? 'gradient-text' : 'text-white'}`}>
-                        {p.total}
-                        <span className="text-xs text-zinc-500 font-normal ml-1">pts</span>
-                      </div>
-                      {p.groupWinnerPoints > 0 && (
-                        <div className="text-xs text-amber-400 font-semibold">{p.matchPoints} + {p.groupWinnerPoints}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {leaderboard.length === 0 && (
-                  <div className="px-6 py-10 text-center text-zinc-500 text-sm">No results entered yet</div>
-                )}
-              </div>
-            </div>
+            <LeaderboardSection leaderboard={leaderboard} />
 
             {/* Group filter */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               <FilterTab label="Results so far" active={activeGroup === 'played'} onClick={() => setActiveGroup('played')} />
               {GROUPS.map(g => (
-                <FilterTab key={g} label={`Group ${g}`} active={activeGroup === g} onClick={() => setActiveGroup(g)} />
+                <FilterTab key={g} label={`Grp ${g}`} active={activeGroup === g} onClick={() => setActiveGroup(g)} />
               ))}
             </div>
 
             {/* Fixture grid */}
             {filteredFixtures.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {filteredFixtures.map(fixture => {
                   const result = resultsMap[fixture.id]
                   return (
-                    <div key={fixture.id} className="glass rounded-2xl overflow-hidden">
-                      <div className="px-5 py-3 bg-zinc-800/60 flex items-center justify-between">
+                    <div key={fixture.id} className="ss-card overflow-hidden">
+                      <div className="px-5 py-3 bg-blue-950/80 flex items-center justify-between border-b border-blue-900">
                         <div className="text-sm font-bold">
                           {TEAM_FLAGS[fixture.homeTeam]} {fixture.homeTeam}
-                          <span className="text-zinc-500 mx-2">vs</span>
+                          <span className="text-blue-400 mx-2">vs</span>
                           {fixture.awayTeam} {TEAM_FLAGS[fixture.awayTeam]}
                         </div>
                         {result ? (
-                          <div className="bg-gradient-to-r from-amber-400 to-amber-600 text-black font-black text-sm px-3 py-1 rounded-full">
+                          <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-black text-sm px-3 py-1 rounded-full">
                             {result.home_score} – {result.away_score}
                           </div>
                         ) : (
-                          <div className="text-zinc-600 text-xs">Pending</div>
+                          <div className="text-blue-600 text-xs">Pending</div>
                         )}
                       </div>
-                      <div className="divide-y divide-white/5">
+                      <div className="divide-y divide-blue-900/40">
                         {leaderboard.map(participant => {
                           const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === fixture.id)
                           if (!pred) return null
@@ -283,11 +302,11 @@ export default function DashboardPage() {
                             ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
                             : null
                           return (
-                            <div key={participant.id} className="px-5 py-2.5 flex items-center gap-3">
-                              <div className="w-28 text-sm font-semibold truncate text-zinc-300">{participant.name}</div>
-                              <div className="flex items-center gap-2 flex-1">
+                            <div key={participant.id} className="px-5 py-2 flex items-center gap-3">
+                              <div className="w-28 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
+                              <div className="flex items-center gap-1.5 flex-1">
                                 <span className="text-sm font-black">{pred.home_score} – {pred.away_score}</span>
-                                {pred.is_joker && <span className="text-amber-400 text-xs font-black">★</span>}
+                                {pred.is_joker && <span className="text-yellow-400 text-xs font-black bg-yellow-400/10 px-1.5 rounded">★J</span>}
                               </div>
                               {scored && (
                                 <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${labelColor(scored.label)}`}>
@@ -304,35 +323,35 @@ export default function DashboardPage() {
                 })}
               </div>
             ) : (
-              <div className="glass rounded-2xl px-6 py-10 text-center text-zinc-500 text-sm">
+              <div className="ss-card px-6 py-10 text-center text-blue-500 text-sm">
                 {activeGroup === 'played' ? 'No results entered yet.' : `No results yet for Group ${activeGroup}.`}
               </div>
             )}
 
-            {/* Full player breakdown */}
-            <div className="glass rounded-3xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/6">
+            {/* All Predictions — expandable */}
+            <div className="ss-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-blue-900 bg-blue-950/50">
                 <h2 className="font-black text-lg">All Predictions</h2>
-                <p className="text-zinc-500 text-xs mt-0.5">Tap a player to see their full picks + group winner predictions</p>
+                <p className="text-blue-400 text-xs mt-0.5">Tap a player to see their full picks</p>
               </div>
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-blue-900/40">
                 {leaderboard.map(p => (
                   <div key={p.id}>
                     <button
-                      className="w-full px-6 py-4 flex items-center gap-3 hover:bg-white/3 transition text-left"
+                      className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-blue-900/20 transition text-left"
                       onClick={() => setExpandedParticipant(expandedParticipant === p.id ? null : p.id)}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-bold">{p.name}</div>
-                        <div className="text-xs text-zinc-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                        <div className="text-xs text-blue-400">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-black text-amber-400">{p.total} pts</div>
+                      <div className="text-right mr-2">
+                        <div className="font-black text-yellow-400">{p.total} pts</div>
                         {p.groupWinnerPoints > 0 && (
-                          <div className="text-xs text-amber-500">{p.matchPoints} + {p.groupWinnerPoints}</div>
+                          <div className="text-xs text-yellow-600">{p.matchPoints}+{p.groupWinnerPoints}</div>
                         )}
                       </div>
-                      <div className="text-zinc-600 text-xs ml-1">{expandedParticipant === p.id ? '▲' : '▼'}</div>
+                      <div className="text-blue-600 text-xs">{expandedParticipant === p.id ? '▲' : '▼'}</div>
                     </button>
                     {expandedParticipant === p.id && (
                       <ParticipantDetail
@@ -354,125 +373,351 @@ export default function DashboardPage() {
   )
 }
 
+// ─── Upcoming Fixtures ────────────────────────────────────────────────────────
+
+function UpcomingFixturesSection({ date, fixtures, leaderboard, predsByParticipant }: {
+  date: string
+  fixtures: typeof FIXTURES
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+}) {
+  const fmt = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+        <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">Upcoming</div>
+        <span className="font-black text-sm uppercase tracking-wide">{fmt}</span>
+      </div>
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {fixtures.map(f => {
+          return (
+            <div key={f.id} className="bg-blue-950/60 rounded-xl border border-blue-900 overflow-hidden">
+              <div className="bg-blue-900/50 px-3 py-2 text-xs font-bold text-center border-b border-blue-900">
+                {TEAM_FLAGS[f.homeTeam]} {f.homeTeam} <span className="text-blue-400 mx-1">vs</span> {f.awayTeam} {TEAM_FLAGS[f.awayTeam]}
+              </div>
+              <div className="divide-y divide-blue-900/40">
+                {leaderboard.map(participant => {
+                  const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === f.id)
+                  if (!pred) return null
+                  return (
+                    <div key={participant.id} className="px-3 py-1.5 flex items-center justify-between text-xs">
+                      <span className="text-blue-200 font-semibold w-20 truncate">{participant.name}</span>
+                      <span className="font-black text-white">{pred.home_score}–{pred.away_score}</span>
+                      {pred.is_joker && (
+                        <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1.5 py-0.5 rounded">★ J</span>
+                      )}
+                      {!pred.is_joker && <span className="w-10" />}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Top Scorer Race ──────────────────────────────────────────────────────────
+
+function TopScorerRace({ race }: { race: Array<{ name: string; picked: number; goals: number }> }) {
+  const maxGoals = Math.max(...race.map(r => r.goals), 1)
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+        <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">⚽ Top Scorer Race</div>
+      </div>
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {race.map((r, i) => (
+          <div key={r.name} className="bg-blue-950/60 rounded-xl border border-blue-900 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="font-black text-sm">{r.name}</div>
+                <div className="text-xs text-blue-400">{r.picked} player{r.picked !== 1 ? 's' : ''} backing them</div>
+              </div>
+              <div className={`text-3xl font-black ${i === 0 ? 'gradient-text' : 'text-white'}`}>{r.goals}</div>
+            </div>
+            <div className="h-1.5 bg-blue-900 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full transition-all duration-700"
+                style={{ width: `${(r.goals / maxGoals) * 100}%` }}
+              />
+            </div>
+            <div className="text-xs text-blue-500 mt-1">{r.goals} goal{r.goals !== 1 ? 's' : ''}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Leaderboard ─────────────────────────────────────────────────────────────
+
+function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+        <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏆 Leaderboard</div>
+        <span className="text-xs text-blue-400 ml-auto">S=Correct Score · R=Correct Result · J=Joker</span>
+      </div>
+      {/* Desktop table */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-blue-900 text-xs text-blue-400 uppercase tracking-wider">
+              <th className="px-4 py-2.5 text-left w-8">#</th>
+              <th className="px-4 py-2.5 text-left">Player</th>
+              <th className="px-3 py-2.5 text-center">Pts</th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-yellow-400 text-black rounded px-1 text-xs font-black">S</span>
+              </th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-yellow-400 text-black rounded px-1 text-xs font-black">SJ</span>
+              </th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-emerald-500 text-white rounded px-1 text-xs font-black">R</span>
+              </th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-emerald-500 text-white rounded px-1 text-xs font-black">RJ</span>
+              </th>
+              <th className="px-3 py-2.5 text-center text-blue-500">Played</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-blue-900/40">
+            {leaderboard.map((p, i) => (
+              <tr key={p.id} className={`hover:bg-blue-900/20 transition ${i === 0 ? 'bg-yellow-400/5' : ''}`}>
+                <td className="px-4 py-3">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
+                    i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-black' :
+                    i === 1 ? 'bg-slate-300 text-slate-900' :
+                    i === 2 ? 'bg-amber-700 text-white' :
+                    'bg-blue-900 text-blue-400'
+                  }`}>{i + 1}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="font-bold">{p.name}</div>
+                  <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <div className={`font-black text-lg ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.total}</div>
+                  {p.groupWinnerPoints > 0 && (
+                    <div className="text-xs text-yellow-600">{p.matchPoints}+{p.groupWinnerPoints}</div>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-center font-bold text-yellow-400">{p.s || '–'}</td>
+                <td className="px-3 py-3 text-center font-bold text-yellow-300">{p.sj || '–'}</td>
+                <td className="px-3 py-3 text-center font-bold text-emerald-400">{p.r || '–'}</td>
+                <td className="px-3 py-3 text-center font-bold text-emerald-300">{p.rj || '–'}</td>
+                <td className="px-3 py-3 text-center text-blue-500">{p.played}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Mobile list */}
+      <div className="sm:hidden divide-y divide-blue-900/40">
+        {leaderboard.map((p, i) => (
+          <div key={p.id} className="px-4 py-3 flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
+              i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-black' :
+              i === 1 ? 'bg-slate-300 text-slate-900' :
+              i === 2 ? 'bg-amber-700 text-white' : 'bg-blue-900 text-blue-400'
+            }`}>{i + 1}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold truncate">{p.name}</div>
+              <div className="text-xs text-blue-400 flex gap-2">
+                <span className="text-yellow-400">S:{p.s}</span>
+                <span className="text-yellow-300">SJ:{p.sj}</span>
+                <span className="text-emerald-400">R:{p.r}</span>
+                <span className="text-emerald-300">RJ:{p.rj}</span>
+              </div>
+            </div>
+            <div className={`font-black text-xl ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.total}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Participant Detail ───────────────────────────────────────────────────────
 
-function ParticipantDetail({
-  participant, preds, resultsMap, predictedWinners, actualWinners,
-}: {
-  participant: Participant
+function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, actualWinners }: {
+  participant: PlayerRow
   preds: Prediction[]
   resultsMap: Record<string, Result>
   predictedWinners: Record<Group, string>
   actualWinners: Record<Group, string | null>
 }) {
+  const [openGroup, setOpenGroup] = useState<Group | null>(null)
   const predMap: Record<string, Prediction> = {}
   for (const p of preds) predMap[p.fixture_id] = p
 
   const correctWinners = GROUPS.filter(g => actualWinners[g] && predictedWinners[g] === actualWinners[g]).length
-  const pendingWinners = GROUPS.filter(g => !actualWinners[g]).length
+  const doneGroups = GROUPS.filter(g => actualWinners[g] !== null).length
 
   return (
-    <div className="bg-zinc-950/60 px-6 pb-6">
-      <div className="text-xs text-emerald-400 py-2 font-semibold">⚽ Top scorer: {participant.top_scorer_pick}</div>
+    <div className="bg-[#060d1f] border-t border-blue-900 px-5 pb-5 pt-4 space-y-5">
+      <div className="text-xs text-emerald-400 font-semibold">⚽ Top scorer pick: {participant.top_scorer_pick}</div>
 
-      {/* Group Winners Section */}
-      <div className="mb-5">
+      {/* Group Winners */}
+      <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">Predicted Group Winners</h3>
-          <div className="text-xs text-zinc-500">
-            {correctWinners > 0 && <span className="text-amber-400 font-bold">+{correctWinners * GROUP_WINNER_POINTS} pts </span>}
-            {correctWinners}/{12 - pendingWinners} correct
-            {pendingWinners > 0 && <span className="text-zinc-600"> · {pendingWinners} pending</span>}
+          <h3 className="text-xs font-black uppercase tracking-widest text-blue-400">Predicted Group Winners</h3>
+          <div className="text-xs text-blue-500">
+            {correctWinners > 0 && <span className="text-yellow-400 font-bold">+{correctWinners * GROUP_WINNER_POINTS}pts · </span>}
+            {correctWinners}/{doneGroups} correct
           </div>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
           {GROUPS.map(g => {
             const predicted = predictedWinners[g]
             const actual = actualWinners[g]
             const isCorrect = actual && predicted === actual
             const isWrong = actual && predicted !== actual
-            const isPending = !actual
-
             return (
-              <div
-                key={g}
-                className={`rounded-xl p-2.5 border text-xs transition ${
-                  isCorrect
-                    ? 'bg-amber-400/15 border-amber-400/40'
-                    : isWrong
-                    ? 'bg-zinc-900 border-zinc-800'
-                    : 'bg-zinc-900 border-zinc-800'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-black text-zinc-400">Group {g}</span>
-                  {isCorrect && <span className="text-amber-400 font-black text-xs">+{GROUP_WINNER_POINTS}</span>}
-                  {isPending && <span className="text-zinc-600 text-xs">•••</span>}
+              <div key={g} className={`rounded-xl p-2 text-xs border text-center ${
+                isCorrect ? 'bg-yellow-400/10 border-yellow-400/40' :
+                isWrong ? 'bg-red-900/20 border-red-900/40' :
+                'bg-blue-900/20 border-blue-900'
+              }`}>
+                <div className="font-black text-blue-400 text-xs">Grp {g}</div>
+                <div className={`font-bold text-xs mt-0.5 ${isCorrect ? 'text-yellow-300' : isWrong ? 'text-red-400 line-through' : 'text-white'}`}>
+                  {TEAM_FLAGS[predicted] || '?'}
                 </div>
-                <div className={`font-bold flex items-center gap-1 ${
-                  isCorrect ? 'text-amber-300' : isWrong ? 'text-zinc-400 line-through' : 'text-white'
-                }`}>
-                  <span>{TEAM_FLAGS[predicted] || '?'}</span>
-                  <span className="truncate text-xs">{predicted || '—'}</span>
+                <div className={`text-xs truncate ${isCorrect ? 'text-yellow-300' : isWrong ? 'text-red-400' : 'text-blue-300'}`}>
+                  {predicted ? predicted.split(' ')[0] : '—'}
                 </div>
-                {isWrong && actual && (
-                  <div className="text-emerald-400 text-xs mt-0.5 flex items-center gap-1">
-                    <span>{TEAM_FLAGS[actual]}</span>
-                    <span className="truncate">{actual}</span>
-                  </div>
-                )}
+                {isCorrect && <div className="text-yellow-400 font-black text-xs">+5</div>}
+                {isWrong && actual && <div className="text-emerald-400 text-xs">{TEAM_FLAGS[actual]}</div>}
+                {!actual && <div className="text-blue-700 text-xs">•••</div>}
               </div>
             )
           })}
         </div>
       </div>
 
-      {/* Match predictions per group */}
-      {GROUPS.map(g => (
-        <div key={g} className="mt-3">
-          <div className="text-xs font-black text-amber-400 mb-1.5">GROUP {g}</div>
-          <div className="space-y-1">
-            {FIXTURES_BY_GROUP[g].map(f => {
+      {/* Collapsible group buttons */}
+      <div>
+        <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-3">Match Predictions</h3>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 mb-3">
+          {GROUPS.map(g => {
+            const groupPreds = FIXTURES_BY_GROUP[g].map(f => {
+              const pred = predMap[f.id]
+              const result = resultsMap[f.id]
+              return pred && result ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker) : null
+            }).filter(Boolean)
+            const groupPts = groupPreds.reduce((sum, s) => sum + (s?.points ?? 0), 0)
+            return (
+              <button
+                key={g}
+                onClick={() => setOpenGroup(openGroup === g ? null : g)}
+                className={`rounded-xl p-2 text-xs border transition text-center ${
+                  openGroup === g ? 'bg-red-700 border-red-600 text-white' : 'bg-blue-900/30 border-blue-900 hover:border-blue-700 text-blue-300'
+                }`}
+              >
+                <div className="font-black">Grp {g}</div>
+                {groupPts > 0 && <div className="text-yellow-400 font-bold">{groupPts}pts</div>}
+              </button>
+            )
+          })}
+        </div>
+
+        {openGroup && (
+          <div className="ss-card p-3 space-y-1.5">
+            <div className="text-xs font-black text-yellow-400 mb-2">GROUP {openGroup}</div>
+            {FIXTURES_BY_GROUP[openGroup].map(f => {
               const pred = predMap[f.id]
               const result = resultsMap[f.id]
               const scored = pred && result
                 ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
                 : null
               return (
-                <div key={f.id} className="flex items-center gap-2 text-xs py-0.5">
-                  <span className="w-20 truncate text-right text-zinc-400">{TEAM_FLAGS[f.homeTeam]} {f.homeTeam}</span>
-                  <span className="font-black w-12 text-center text-white">
+                <div key={f.id} className="flex items-center gap-2 text-xs py-1 border-b border-blue-900/40 last:border-0">
+                  <span className="flex-1 text-right text-blue-200 truncate">{TEAM_FLAGS[f.homeTeam]} {f.homeTeam}</span>
+                  <span className="font-black text-white min-w-[40px] text-center">
                     {pred ? `${pred.home_score}–${pred.away_score}` : '–'}
                   </span>
-                  <span className="w-20 truncate text-zinc-400">{f.awayTeam} {TEAM_FLAGS[f.awayTeam]}</span>
-                  {pred?.is_joker && <span className="text-amber-400">★</span>}
+                  <span className="flex-1 text-blue-200 truncate">{f.awayTeam} {TEAM_FLAGS[f.awayTeam]}</span>
+                  {pred?.is_joker && <span className="text-yellow-400 font-black">★</span>}
                   {scored && (
-                    <span className={`ml-auto px-1.5 py-0.5 rounded-lg text-xs font-black ${labelColor(scored.label)}`}>
-                      {scored.label === null ? '–' : scored.label}
-                      {scored.points > 0 ? ` +${scored.points}` : ''}
+                    <span className={`ml-1 px-1.5 py-0.5 rounded font-black ${labelColor(scored.label)}`}>
+                      {scored.label === null ? '–' : scored.label}{scored.points > 0 ? ` +${scored.points}` : ''}
                     </span>
                   )}
                 </div>
               )
             })}
           </div>
-        </div>
-      ))}
+        )}
+      </div>
     </div>
   )
 }
 
+// ─── Ticker Generator ─────────────────────────────────────────────────────────
+
+function generateTickerItems(
+  leaderboard: PlayerRow[],
+  results: Result[],
+  resultsMap: Record<string, Result>,
+  predsByParticipant: Record<string, Prediction[]>,
+  fixtures: typeof FIXTURES,
+): string[] {
+  const items: string[] = []
+
+  // Recent results
+  for (const result of [...results].reverse().slice(0, 8)) {
+    const f = fixtures.find(x => x.id === result.fixture_id)
+    if (f) items.push(`${TEAM_FLAGS[f.homeTeam]} ${f.homeTeam} ${result.home_score}–${result.away_score} ${f.awayTeam} ${TEAM_FLAGS[f.awayTeam]}`)
+  }
+
+  // Exact score hits
+  for (const p of leaderboard) {
+    for (const pred of (predsByParticipant[p.id] || [])) {
+      const result = resultsMap[pred.fixture_id]
+      if (!result) continue
+      const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      if (scored.label === 'S' || scored.label === 'SJ') {
+        const f = fixtures.find(x => x.id === pred.fixture_id)
+        if (f) items.push(`🎯 ${p.name} nailed the exact score${pred.is_joker ? ' 🃏 JOKER' : ''}: ${f.homeTeam} ${pred.home_score}–${pred.away_score} ${f.awayTeam} (+${scored.points}pts)`)
+      }
+    }
+  }
+
+  // Streaks without a point
+  for (const p of leaderboard) {
+    let streak = 0
+    for (const pred of [...(predsByParticipant[p.id] || [])].reverse()) {
+      const result = resultsMap[pred.fixture_id]
+      if (!result) continue
+      const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      if (scored.points === 0) streak++
+      else break
+    }
+    if (streak >= 3) items.push(`📉 ${p.name} is on ${streak} fixtures without a point`)
+  }
+
+  // Top 3 leaderboard
+  const top3 = leaderboard.slice(0, 3)
+  if (top3.length > 0) items.push(`🏆 Top 3: ${top3.map((p, i) => `${i + 1}. ${p.name} ${p.total}pts`).join(' · ')}`)
+
+  // Fallback
+  if (items.length === 0) return [
+    '⚽ World Cup 2026 — USA, Canada & Mexico', '🏆 Family Predictor Tournament', '📊 Predictions locked — results updating live',
+    '🌍 48 teams · 12 groups · 72 matches', '🃏 Use your jokers wisely — double points await',
+  ]
+
+  return items
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function FilterTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
-        active
-          ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-black shadow-md shadow-amber-400/20'
-          : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-      }`}
-    >
-      {label}
-    </button>
+    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
+      active ? 'bg-red-600 text-white shadow-md shadow-red-900/40' : 'bg-blue-950 border border-blue-900 text-blue-400 hover:border-blue-700'
+    }`}>{label}</button>
   )
 }

@@ -7,8 +7,8 @@
 @layer base {
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: #09090b;
-    color: #fafafa;
+    background-color: #060d1f;
+    color: #fff;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
   }
@@ -22,7 +22,7 @@
   .scrollbar-hide::-webkit-scrollbar { display: none; }
 
   .gradient-text {
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    background: linear-gradient(135deg, #ffd700, #ffaa00);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -34,27 +34,24 @@
     border: 1px solid rgba(255,255,255,0.08);
   }
 
-  .glass-hover {
-    transition: background 0.2s, border-color 0.2s;
-  }
-  .glass-hover:hover {
-    background: rgba(255,255,255,0.07);
-    border-color: rgba(255,255,255,0.14);
+  .ss-card {
+    background: #0c1733;
+    border: 1px solid #1a2d5a;
+    border-radius: 1rem;
   }
 
   .btn-gold {
-    background: linear-gradient(135deg, #fbbf24, #d97706);
+    background: linear-gradient(135deg, #ffd700, #e09900);
     color: #000;
     font-weight: 700;
     transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
-    box-shadow: 0 4px 20px rgba(251,191,36,0.25);
+    box-shadow: 0 4px 20px rgba(255,215,0,0.25);
   }
   .btn-gold:hover:not(:disabled) {
     opacity: 0.92;
-    box-shadow: 0 6px 28px rgba(251,191,36,0.4);
+    box-shadow: 0 6px 28px rgba(255,215,0,0.4);
     transform: translateY(-1px);
   }
-  .btn-gold:active:not(:disabled) { transform: translateY(0); }
   .btn-gold:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
 
   .score-input {
@@ -71,15 +68,24 @@
   }
   .score-input:focus {
     outline: none;
-    border-color: #fbbf24;
-    background: rgba(251,191,36,0.08);
-    box-shadow: 0 0 0 3px rgba(251,191,36,0.15);
+    border-color: #ffd700;
+    background: rgba(255,215,0,0.08);
+    box-shadow: 0 0 0 3px rgba(255,215,0,0.15);
   }
 }
 
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* Sky Sports ticker animation */
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
+.animate-ticker {
+  display: inline-flex;
+  animation: ticker 45s linear infinite;
+  white-space: nowrap;
+}
+.animate-ticker:hover { animation-play-state: paused; }
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type='number'] { -moz-appearance: textfield; }
