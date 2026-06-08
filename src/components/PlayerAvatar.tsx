@@ -2,15 +2,15 @@ import { useState } from 'react'
 
 // Map participant names to their photo filenames in /public/avatars/
 const AVATAR_MAP: Record<string, string> = {
-  'Maggie':         '/avatars/maggie.jpg',
+  'Maggie Swallow': '/avatars/maggie.jpg',
   'Glen Kirkham':   '/avatars/glen.jpg',
   'Joe Swallow':    '/avatars/joe.jpg',
-  'Fin':            '/avatars/fin.jpg',
+  'Fin Bullough':   '/avatars/fin.jpg',
   'Zac Bullough':   '/avatars/zac.jpg',
-  'Mike':           '/avatars/mike.jpg',
+  'Mike Swallow':   '/avatars/mike.jpg',
   'Sheila Kirkham': '/avatars/sheila.jpg',
   'Spike':          '/avatars/spike.jpg',
-  'DAVID KIRKHAM':  '/avatars/david.jpg',
+  'David Kirkham':  '/avatars/david.jpg',
   'The Oracle':     '/avatars/theoracle.jpg',
   'Rach':           '/avatars/rach.jpg',
   'Jean Kirkham':   '/avatars/jean.jpg',
