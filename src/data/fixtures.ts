@@ -64,18 +64,60 @@ const MD3_DATES: Record<Group, [string, string]> = {
   L: ['2026-06-27', '2026-06-27'],
 }
 
+// Known kick-off times in UTC (BST = UTC+1 in June)
+// Format: fixture_id -> UTC ISO time
+const KICKOFF_TIMES: Record<string, string> = {
+  // Group A — 11 Jun
+  A1: '2026-06-11T19:00:00Z', // Mexico vs South Africa 8pm BST
+  A2: '2026-06-12T01:00:00Z', // South Korea vs Czechia 2am BST
+  // Group B — 12/13 Jun
+  B1: '2026-06-12T19:00:00Z', // Canada vs Bosnia 8pm BST
+  B2: '2026-06-13T19:00:00Z', // Qatar vs Switzerland 8pm BST
+  // Group C — 13 Jun
+  C1: '2026-06-13T23:00:00Z', // Brazil vs Morocco midnight BST
+  C2: '2026-06-14T02:00:00Z', // Haiti vs Scotland 3am BST
+  // Group D — 12/13 Jun
+  D1: '2026-06-13T01:00:00Z', // USA vs Paraguay 2am BST
+  D2: '2026-06-13T02:00:00Z', // Australia vs Türkiye 3am BST
+  // Group E — 14 Jun
+  E1: '2026-06-14T18:00:00Z', // Germany vs Curaçao 7pm BST
+  E2: '2026-06-15T00:00:00Z', // Ivory Coast vs Ecuador 1am BST
+  // Group F — 14 Jun
+  F1: '2026-06-14T21:00:00Z', // Netherlands vs Japan 10pm BST
+  F2: '2026-06-15T03:00:00Z', // Sweden vs Tunisia 4am BST
+  // Group G — 15 Jun
+  G1: '2026-06-15T23:00:00Z', // Belgium vs Egypt midnight BST
+  G2: '2026-06-16T02:00:00Z', // Iran vs New Zealand 3am BST
+  // Group H — 15 Jun
+  H1: '2026-06-15T18:00:00Z', // Spain vs Cabo Verde 7pm BST
+  H2: '2026-06-15T23:00:00Z', // Saudi Arabia vs Uruguay midnight BST
+  // Group I — 16 Jun
+  I1: '2026-06-16T20:00:00Z', // France vs Senegal 9pm BST
+  I2: '2026-06-16T23:00:00Z', // Iraq vs Norway midnight BST
+  // Group J — 16/17 Jun
+  J1: '2026-06-17T02:00:00Z', // Argentina vs Algeria 3am BST
+  J2: '2026-06-17T05:00:00Z', // Austria vs Jordan 6am BST
+  // Group K — 17 Jun
+  K1: '2026-06-17T18:00:00Z', // Portugal vs DR Congo 7pm BST
+  K2: '2026-06-18T03:00:00Z', // Uzbekistan vs Colombia 4am BST
+  // Group L — 17 Jun
+  L1: '2026-06-17T21:00:00Z', // England vs Croatia 10pm BST
+  L2: '2026-06-18T00:00:00Z', // Ghana vs Panama 1am BST
+}
+
 function buildGroup(group: Group): Fixture[] {
   const [t1, t2, t3, t4] = TEAM_ORDER[group]
   const [d1a, d1b] = MD1_DATES[group]
   const [d2a, d2b] = MD2_DATES[group]
   const [d3a, d3b] = MD3_DATES[group]
+  const ko = (id: string) => KICKOFF_TIMES[id]
   return [
-    { id: `${group}1`, homeTeam: t1, awayTeam: t2, group, matchday: 1, date: d1a },
-    { id: `${group}2`, homeTeam: t3, awayTeam: t4, group, matchday: 1, date: d1b },
-    { id: `${group}3`, homeTeam: t1, awayTeam: t3, group, matchday: 2, date: d2a },
-    { id: `${group}4`, homeTeam: t4, awayTeam: t2, group, matchday: 2, date: d2b },
-    { id: `${group}5`, homeTeam: t1, awayTeam: t4, group, matchday: 3, date: d3a },
-    { id: `${group}6`, homeTeam: t2, awayTeam: t3, group, matchday: 3, date: d3b },
+    { id: `${group}1`, homeTeam: t1, awayTeam: t2, group, matchday: 1, date: d1a, kickoffUtc: ko(`${group}1`) },
+    { id: `${group}2`, homeTeam: t3, awayTeam: t4, group, matchday: 1, date: d1b, kickoffUtc: ko(`${group}2`) },
+    { id: `${group}3`, homeTeam: t1, awayTeam: t3, group, matchday: 2, date: d2a, kickoffUtc: ko(`${group}3`) },
+    { id: `${group}4`, homeTeam: t4, awayTeam: t2, group, matchday: 2, date: d2b, kickoffUtc: ko(`${group}4`) },
+    { id: `${group}5`, homeTeam: t1, awayTeam: t4, group, matchday: 3, date: d3a, kickoffUtc: ko(`${group}5`) },
+    { id: `${group}6`, homeTeam: t2, awayTeam: t3, group, matchday: 3, date: d3b, kickoffUtc: ko(`${group}6`) },
   ]
 }
 

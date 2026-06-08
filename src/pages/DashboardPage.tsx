@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture } from '../types'
 import { GROUPS } from '../types'
+import PlayerAvatar from '../components/PlayerAvatar'
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
 
@@ -269,6 +270,11 @@ export default function DashboardPage() {
             {/* Leaderboard */}
             <LeaderboardSection leaderboard={leaderboard} />
 
+            {/* Form Table */}
+            {results.length >= 5 && (
+              <FormTable leaderboard={leaderboard} predsByParticipant={predsByParticipant} resultsMap={resultsMap} />
+            )}
+
             {/* Points Guide */}
             <PointsGuide />
 
@@ -317,6 +323,7 @@ export default function DashboardPage() {
                       className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-blue-900/20 transition text-left"
                       onClick={() => setExpandedParticipant(expandedParticipant === p.id ? null : p.id)}
                     >
+                      <PlayerAvatar name={p.name} size="md" />
                       <div className="flex-1 min-w-0">
                         <div className="font-bold">{p.name}</div>
                         <div className="text-xs text-blue-400">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
@@ -349,6 +356,56 @@ export default function DashboardPage() {
   )
 }
 
+// ─── Countdown Hook ───────────────────────────────────────────────────────────
+
+function useCountdown(targetUtc?: string) {
+  const calc = useCallback(() => {
+    if (!targetUtc) return null
+    const diff = new Date(targetUtc).getTime() - Date.now()
+    if (diff <= 0) return null
+    const h = Math.floor(diff / 3600000)
+    const m = Math.floor((diff % 3600000) / 60000)
+    const s = Math.floor((diff % 60000) / 1000)
+    return { h, m, s, diff }
+  }, [targetUtc])
+
+  const [time, setTime] = useState(calc)
+  useEffect(() => {
+    const id = setInterval(() => setTime(calc()), 1000)
+    return () => clearInterval(id)
+  }, [calc])
+  return time
+}
+
+function CountdownBadge({ kickoffUtc }: { kickoffUtc?: string }) {
+  const t = useCountdown(kickoffUtc)
+  if (!kickoffUtc) return null
+  if (!t) return <span className="text-xs font-bold text-red-400 bg-red-900/30 px-2 py-0.5 rounded-full">LIVE / PLAYED</span>
+
+  const isImminent = t.diff < 3600000 // under 1 hour
+  const isToday = t.h < 24
+
+  if (isImminent) {
+    return (
+      <span className="text-xs font-black text-red-400 bg-red-900/40 border border-red-700/50 px-2.5 py-1 rounded-full animate-pulse">
+        {t.h > 0 ? `${t.h}h ` : ''}{String(t.m).padStart(2,'0')}:{String(t.s).padStart(2,'0')}
+      </span>
+    )
+  }
+  if (isToday) {
+    return (
+      <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+        {t.h}h {t.m}m
+      </span>
+    )
+  }
+  return (
+    <span className="text-xs font-semibold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded-full">
+      {Math.floor(t.h / 24)}d {t.h % 24}h
+    </span>
+  )
+}
+
 // ─── Upcoming Fixtures ────────────────────────────────────────────────────────
 
 function UpcomingFixturesSection({ date, fixtures, leaderboard, predsByParticipant }: {
@@ -365,31 +422,36 @@ function UpcomingFixturesSection({ date, fixtures, leaderboard, predsByParticipa
         <span className="font-black text-sm uppercase tracking-wide">{fmt}</span>
       </div>
       <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {fixtures.map(f => {
-          return (
-            <div key={f.id} className="bg-blue-950/60 rounded-xl border border-blue-900 overflow-hidden">
-              <div className="bg-blue-900/50 px-3 py-2 text-xs font-bold text-center border-b border-blue-900">
-                {TEAM_FLAGS[f.homeTeam]} {f.homeTeam} <span className="text-blue-400 mx-1">vs</span> {f.awayTeam} {TEAM_FLAGS[f.awayTeam]}
+        {fixtures.map(f => (
+          <div key={f.id} className="bg-blue-950/60 rounded-xl border border-blue-900 overflow-hidden">
+            <div className="bg-blue-900/50 px-3 py-2.5 border-b border-blue-900 space-y-1.5">
+              <div className="text-xs font-bold text-center">
+                {TEAM_FLAGS[f.homeTeam]} {f.homeTeam}
+                <span className="text-blue-400 mx-1.5">vs</span>
+                {f.awayTeam} {TEAM_FLAGS[f.awayTeam]}
               </div>
-              <div className="divide-y divide-blue-900/40">
-                {leaderboard.map(participant => {
-                  const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === f.id)
-                  if (!pred) return null
-                  return (
-                    <div key={participant.id} className="px-3 py-1.5 flex items-center justify-between text-xs">
-                      <span className="text-blue-200 font-semibold w-20 truncate">{participant.name}</span>
-                      <span className="font-black text-white">{pred.home_score}–{pred.away_score}</span>
-                      {pred.is_joker && (
-                        <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1.5 py-0.5 rounded">★ J</span>
-                      )}
-                      {!pred.is_joker && <span className="w-10" />}
-                    </div>
-                  )
-                })}
+              <div className="flex justify-center">
+                <CountdownBadge kickoffUtc={f.kickoffUtc} />
               </div>
             </div>
-          )
-        })}
+            <div className="divide-y divide-blue-900/40">
+              {leaderboard.map(participant => {
+                const pred = (predsByParticipant[participant.id] || []).find(p => p.fixture_id === f.id)
+                if (!pred) return null
+                return (
+                  <div key={participant.id} className="px-3 py-1.5 flex items-center gap-2 text-xs">
+                    <PlayerAvatar name={participant.name} size="sm" />
+                    <span className="text-blue-200 font-semibold flex-1 truncate">{participant.name}</span>
+                    <span className="font-black text-white">{pred.home_score}–{pred.away_score}</span>
+                    {pred.is_joker && (
+                      <span className="text-yellow-400 font-black bg-yellow-400/10 px-1.5 py-0.5 rounded">★J</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -421,6 +483,98 @@ function TopScorerRace({ race }: { race: Array<{ name: string; picked: number; g
               />
             </div>
             <div className="text-xs text-blue-500 mt-1">{r.goals} goal{r.goals !== 1 ? 's' : ''}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Form Table ───────────────────────────────────────────────────────────────
+
+function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+  resultsMap: Record<string, Result>
+}) {
+  // Get last 5 results (by entered_at order) for each player
+  const formData = useMemo(() => {
+    // Fixture IDs in result order (most recently entered last)
+    const playedFixtureIds = Object.keys(resultsMap)
+
+    return leaderboard.map(p => {
+      const preds = predsByParticipant[p.id] || []
+      const predMap: Record<string, Prediction> = {}
+      for (const pred of preds) predMap[pred.fixture_id] = pred
+
+      // Last 5 played fixtures
+      const last5 = playedFixtureIds.slice(-5)
+      const formPts = last5.reduce((sum, fid) => {
+        const pred = predMap[fid]
+        const result = resultsMap[fid]
+        if (!pred || !result) return sum
+        return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+      }, 0)
+
+      const dots = last5.map(fid => {
+        const pred = predMap[fid]
+        const result = resultsMap[fid]
+        if (!pred || !result) return 'none'
+        const pts = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+        if (pts >= 5) return 'gold'
+        if (pts > 0) return 'green'
+        return 'red'
+      })
+
+      return { ...p, formPts, dots }
+    }).sort((a, b) => b.formPts - a.formPts)
+  }, [leaderboard, predsByParticipant, resultsMap])
+
+  const dotColor: Record<string, string> = {
+    gold: 'bg-yellow-400',
+    green: 'bg-emerald-500',
+    red: 'bg-red-600',
+    none: 'bg-blue-900',
+  }
+  const dotTitle: Record<string, string> = {
+    gold: 'Correct score (+5)',
+    green: 'Correct result (+2)',
+    red: 'No points',
+    none: '–',
+  }
+
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">📈 Form</div>
+          <span className="text-sm font-black">Last 5 Games</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-blue-500">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" /> Score</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Result</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> Blank</span>
+        </div>
+      </div>
+      <div className="divide-y divide-blue-900/40">
+        {formData.map((p, i) => (
+          <div key={p.id} className="px-5 py-3 flex items-center gap-3">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
+              i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-black' : 'bg-blue-900 text-blue-400'
+            }`}>{i + 1}</div>
+            <PlayerAvatar name={p.name} size="sm" />
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-sm truncate">{p.name}</div>
+              <div className="flex gap-1 mt-1">
+                {p.dots.map((d, idx) => (
+                  <div key={idx} title={dotTitle[d]} className={`w-3 h-3 rounded-full ${dotColor[d]}`} />
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={`font-black text-lg ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.formPts}</div>
+              <div className="text-xs text-blue-500">last 5</div>
+            </div>
           </div>
         ))}
       </div>
@@ -509,8 +663,13 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                   }`}>{i + 1}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-bold">{p.name}</div>
-                  <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                  <div className="flex items-center gap-2.5">
+                    <PlayerAvatar name={p.name} size="sm" />
+                    <div>
+                      <div className="font-bold">{p.name}</div>
+                      <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-3 py-3 text-center font-bold text-emerald-400">{p.r || '–'}</td>
                 <td className="px-3 py-3 text-center font-bold text-emerald-300">{p.rj || '–'}</td>
@@ -531,11 +690,12 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
       <div className="sm:hidden divide-y divide-blue-900/40">
         {leaderboard.map((p, i) => (
           <div key={p.id} className="px-4 py-3 flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
               i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-black' :
               i === 1 ? 'bg-slate-300 text-slate-900' :
               i === 2 ? 'bg-amber-700 text-white' : 'bg-blue-900 text-blue-400'
             }`}>{i + 1}</div>
+            <PlayerAvatar name={p.name} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{p.name}</div>
               <div className="text-xs text-blue-400 flex gap-2">

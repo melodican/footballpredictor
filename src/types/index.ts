@@ -8,6 +8,7 @@ export interface Fixture {
   group: Group
   matchday: 1 | 2 | 3
   date: string
+  kickoffUtc?: string  // ISO datetime e.g. "2026-06-11T19:00:00Z"
 }
 
 export interface Participant {
