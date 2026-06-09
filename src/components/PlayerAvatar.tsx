@@ -11,7 +11,7 @@ const AVATAR_MAP: Record<string, string> = {
   'Sheila Kirkham': '/avatars/sheila.jpg',
   'Spike':          '/avatars/spike.jpg',
   'David Kirkham':  '/avatars/david.jpg',
-  'The Oracle':     '/avatars/theoracle.jpg',
+  'The Oracle':     '/avatars/oracle.png',
   'Rach Bullough':  '/avatars/rach.jpg',
   'Jean Kirkham':   '/avatars/jean.jpg',
 }
