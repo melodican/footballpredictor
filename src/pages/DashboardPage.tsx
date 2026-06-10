@@ -224,9 +224,10 @@ export default function DashboardPage() {
               <span className="gradient-text">WC2026</span>
               <span className="text-white ml-2">Predictor</span>
             </h1>
-            <div className="flex items-center gap-4 mt-1 text-xs text-blue-400 font-medium">
+            <div className="flex items-center gap-4 mt-1 text-xs text-blue-400 font-medium flex-wrap">
               <span>👥 {participants.length} players</span>
               <span>🎯 {results.length} results in</span>
+              <span className="text-yellow-400 font-bold">🥇 £100 · 🥈 £30 · 🥉 £10</span>
               {!revealed && <span className="text-yellow-400">🔒 Predictions hidden</span>}
             </div>
           </div>
