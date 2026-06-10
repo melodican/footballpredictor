@@ -649,7 +649,8 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
         <span className="text-xs text-blue-400 ml-auto hidden sm:block">
           <span className="text-yellow-400 font-bold">S</span>=Correct Score (5pts) ·{' '}
           <span className="text-emerald-400 font-bold">R</span>=Correct Result (2pts) ·{' '}
-          <span className="text-yellow-300 font-bold">J</span>=Joker ×2
+          <span className="text-yellow-300 font-bold">J</span>=Joker ×2 ·{' '}
+          <span className="text-purple-400 font-bold">GW</span>=Group Winner (5pts)
         </span>
       </div>
       {/* Desktop table */}
@@ -670,6 +671,9 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
               </th>
               <th className="px-3 py-2.5 text-center">
                 <span className="bg-yellow-400 text-black rounded px-1 text-xs font-black">SJ</span>
+              </th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-purple-600 text-white rounded px-1 text-xs font-black">GW</span>
               </th>
               <th className="px-3 py-2.5 text-center font-black text-white">Pts</th>
             </tr>
@@ -698,11 +702,10 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                 <td className="px-3 py-3 text-center font-bold text-emerald-300">{p.rj || '–'}</td>
                 <td className="px-3 py-3 text-center font-bold text-yellow-400">{p.s || '–'}</td>
                 <td className="px-3 py-3 text-center font-bold text-yellow-300">{p.sj || '–'}</td>
+                <td className="px-3 py-3 text-center font-bold text-purple-400">{p.groupWinnerPoints || '–'}</td>
                 <td className="px-3 py-3 text-center">
                   <div className={`font-black text-lg ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.total}</div>
-                  {p.groupWinnerPoints > 0 && (
-                    <div className="text-xs text-yellow-600">{p.matchPoints}+{p.groupWinnerPoints}</div>
-                  )}
+
                 </td>
               </tr>
             ))}
@@ -726,6 +729,7 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                 <span className="text-emerald-300">RJ:{p.rj}</span>
                 <span className="text-yellow-400">S:{p.s}</span>
                 <span className="text-yellow-300">SJ:{p.sj}</span>
+                {p.groupWinnerPoints > 0 && <span className="text-purple-400">GW:{p.groupWinnerPoints}</span>}
               </div>
             </div>
             <div className={`font-black text-xl ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.total}</div>
