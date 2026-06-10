@@ -156,17 +156,16 @@ export default function DashboardPage() {
     generateTickerItems(leaderboard, results, resultsMap, predsByParticipant, FIXTURES),
     [leaderboard, results, resultsMap, predsByParticipant])
 
-  // Top scorer race
+  // Top scorer race — all picked players, sorted by goals scored desc (then pick count)
   const topScorerRace = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const p of participants) {
-      counts[p.top_scorer_pick] = (counts[p.top_scorer_pick] || 0) + 1
+      if (p.top_scorer_pick) counts[p.top_scorer_pick] = (counts[p.top_scorer_pick] || 0) + 1
     }
     const goals = (settings?.scorer_goals as Record<string, number>) ?? {}
     return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
       .map(([name, picked]) => ({ name, picked, goals: goals[name] ?? 0 }))
+      .sort((a, b) => b.goals - a.goals || b.picked - a.picked)
   }, [participants, settings])
 
   const filteredFixtures = activeGroup === 'played'
@@ -461,30 +460,54 @@ function UpcomingFixturesSection({ date, fixtures, leaderboard, predsByParticipa
 
 function TopScorerRace({ race }: { race: Array<{ name: string; picked: number; goals: number }> }) {
   const maxGoals = Math.max(...race.map(r => r.goals), 1)
+  const hasGoals = race.some(r => r.goals > 0)
   return (
     <div className="ss-card overflow-hidden">
-      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
-        <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">⚽ Top Scorer Race</div>
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">⚽ Top Scorer Race</div>
+          {hasGoals && <span className="text-xs text-blue-400">Sorted by goals scored</span>}
+        </div>
+        <span className="text-xs text-blue-500">{race.length} players picked</span>
       </div>
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {race.map((r, i) => (
-          <div key={r.name} className="bg-blue-950/60 rounded-xl border border-blue-900 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <div className="font-black text-sm">{r.name}</div>
-                <div className="text-xs text-blue-400">{r.picked} player{r.picked !== 1 ? 's' : ''} backing them</div>
+      <div className="divide-y divide-blue-900/40">
+        {race.map((r, i) => {
+          const isLeader = i === 0 && r.goals > 0
+          const barWidth = maxGoals > 0 ? `${Math.max((r.goals / maxGoals) * 100, r.goals === 0 ? 0 : 4)}%` : '0%'
+          return (
+            <div key={r.name} className={`px-5 py-3.5 flex items-center gap-4 ${isLeader ? 'bg-yellow-400/5' : ''}`}>
+              {/* Position badge */}
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
+                isLeader ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-black' :
+                i === 1 && r.goals > 0 ? 'bg-slate-300 text-slate-900' :
+                i === 2 && r.goals > 0 ? 'bg-amber-700 text-white' :
+                'bg-blue-900 text-blue-500'
+              }`}>
+                {isLeader ? '👑' : i + 1}
               </div>
-              <div className={`text-3xl font-black ${i === 0 ? 'gradient-text' : 'text-white'}`}>{r.goals}</div>
+              {/* Name + backers */}
+              <div className="flex-1 min-w-0">
+                <div className={`font-black text-sm truncate ${isLeader ? 'text-yellow-300' : 'text-white'}`}>{r.name}</div>
+                <div className="mt-1.5 h-1.5 bg-blue-900 rounded-full overflow-hidden w-full">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${
+                      isLeader ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-gradient-to-r from-blue-500 to-blue-400'
+                    }`}
+                    style={{ width: barWidth }}
+                  />
+                </div>
+                <div className="text-xs text-blue-500 mt-1">{r.picked} family member{r.picked !== 1 ? 's' : ''} backing them</div>
+              </div>
+              {/* Goal count */}
+              <div className="text-right flex-shrink-0">
+                <div className={`font-black text-2xl ${isLeader ? 'gradient-text' : r.goals > 0 ? 'text-white' : 'text-blue-700'}`}>
+                  {r.goals}
+                </div>
+                <div className="text-xs text-blue-600">goal{r.goals !== 1 ? 's' : ''}</div>
+              </div>
             </div>
-            <div className="h-1.5 bg-blue-900 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full transition-all duration-700"
-                style={{ width: `${(r.goals / maxGoals) * 100}%` }}
-              />
-            </div>
-            <div className="text-xs text-blue-500 mt-1">{r.goals} goal{r.goals !== 1 ? 's' : ''}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
