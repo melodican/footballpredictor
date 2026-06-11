@@ -15,6 +15,7 @@ const AVATAR_MAP: Record<string, string> = {
   'Rach Bullough':  '/avatars/rach.jpg',
   'Jean Kirkham':   '/avatars/jean.jpg',
   'Gem':            '/avatars/gem.png',
+  'Russell Smith':  '/avatars/russ.png',
 }
 
 const COLOURS = [
