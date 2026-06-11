@@ -1110,15 +1110,15 @@ function FixtureCard({ fixture, result, leaderboard, predsByParticipant }: {
         <div className="divide-y divide-blue-900/40">
           {/* Column headers */}
           <div className="px-5 py-1.5 flex items-center gap-3 bg-blue-950/40">
-            <div className="w-28 text-xs font-black text-blue-500 uppercase tracking-wider">Player</div>
-            <div className="w-14 text-xs font-black text-blue-500 uppercase tracking-wider text-center">Pick</div>
+            <div className="w-36 text-xs font-black text-blue-500 uppercase tracking-wider">Player</div>
+            <div className="w-24 text-xs font-black text-blue-500 uppercase tracking-wider">Pick</div>
             <div className="flex-1 text-xs font-black text-blue-500 uppercase tracking-wider">Outcome</div>
             <div className="w-12 text-xs font-black text-blue-500 uppercase tracking-wider text-right">Pts</div>
           </div>
           {rows.map(({ participant, pred, scored }) => (
             <div key={participant.id} className="px-5 py-2.5 flex items-center gap-3">
-              <div className="w-28 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="w-36 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
+              <div className="w-24 flex items-center gap-1">
                 <span className="text-sm font-black text-white whitespace-nowrap">{pred.home_score}–{pred.away_score}</span>
                 {pred.is_joker && (
                   <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1 py-0.5 rounded whitespace-nowrap">★J</span>
