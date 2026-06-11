@@ -81,7 +81,7 @@
 }
 .animate-ticker {
   display: inline-flex;
-  animation: ticker 45s linear infinite;
+  animation: ticker 120s linear infinite;
   white-space: nowrap;
 }
 .animate-ticker:hover { animation-play-state: paused; }
