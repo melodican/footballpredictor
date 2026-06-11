@@ -1118,10 +1118,10 @@ function FixtureCard({ fixture, result, leaderboard, predsByParticipant }: {
           {rows.map(({ participant, pred, scored }) => (
             <div key={participant.id} className="px-5 py-2.5 flex items-center gap-3">
               <div className="w-28 text-sm font-semibold truncate text-blue-200">{participant.name}</div>
-              <div className="w-14 text-center flex items-center justify-center gap-1">
-                <span className="text-sm font-black text-white">{pred.home_score}–{pred.away_score}</span>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <span className="text-sm font-black text-white whitespace-nowrap">{pred.home_score}–{pred.away_score}</span>
                 {pred.is_joker && (
-                  <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1 py-0.5 rounded">★J</span>
+                  <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1 py-0.5 rounded whitespace-nowrap">★J</span>
                 )}
               </div>
               <div className={`flex-1 text-sm font-semibold ${scored ? outcomeBg(scored.label) : 'text-blue-600'}`}>
