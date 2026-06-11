@@ -652,8 +652,8 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
         <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏆 Leaderboard</div>
         <span className="text-xs text-blue-400 ml-auto hidden sm:block">
           <span className="text-yellow-400 font-bold">🃏</span>=Jokers Remaining ·{' '}
-          <span className="text-yellow-400 font-bold">S</span>=Correct Score (5pts) ·{' '}
           <span className="text-emerald-400 font-bold">R</span>=Correct Result (2pts) ·{' '}
+          <span className="text-yellow-400 font-bold">S</span>=Correct Score (5pts) ·{' '}
           <span className="text-yellow-300 font-bold">J</span>=Joker ×2 ·{' '}
           <span className="text-purple-400 font-bold">GW</span>=Group Winner (5pts)
         </span>
