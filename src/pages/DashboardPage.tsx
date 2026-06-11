@@ -18,6 +18,7 @@ interface PlayerRow extends Participant {
   tournamentWinnerPoints: number
   goldenBootPoints: number
   s: number; sj: number; r: number; rj: number; played: number
+  jokersRemaining: number
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -107,8 +108,9 @@ export default function DashboardPage() {
   const leaderboard: PlayerRow[] = useMemo(() => {
     return participants.map(p => {
       const preds = predsByParticipant[p.id] || []
-      let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0
+      let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0, jokersUsed = 0
       for (const pred of preds) {
+        if (pred.is_joker) jokersUsed++
         const result = resultsMap[pred.fixture_id]
         if (!result) continue
         played++
@@ -138,6 +140,7 @@ export default function DashboardPage() {
         ...p, matchPoints, groupWinnerPoints, tournamentWinnerPoints, goldenBootPoints,
         total: matchPoints + groupWinnerPoints + tournamentWinnerPoints + goldenBootPoints,
         s, sj, r, rj, played,
+        jokersRemaining: 12 - jokersUsed,
       }
     }).sort((a, b) => b.total - a.total)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
@@ -648,6 +651,7 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
       <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
         <div className="bg-yellow-500 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏆 Leaderboard</div>
         <span className="text-xs text-blue-400 ml-auto hidden sm:block">
+          <span className="text-yellow-400 font-bold">🃏</span>=Jokers left ·{' '}
           <span className="text-yellow-400 font-bold">S</span>=Correct Score (5pts) ·{' '}
           <span className="text-emerald-400 font-bold">R</span>=Correct Result (2pts) ·{' '}
           <span className="text-yellow-300 font-bold">J</span>=Joker ×2 ·{' '}
@@ -661,6 +665,9 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
             <tr className="border-b border-blue-900 text-xs text-blue-400 uppercase tracking-wider">
               <th className="px-4 py-2.5 text-left w-8">#</th>
               <th className="px-4 py-2.5 text-left">Player</th>
+              <th className="px-3 py-2.5 text-center">
+                <span className="bg-yellow-400 text-black rounded px-1 text-xs font-black">🃏</span>
+              </th>
               <th className="px-3 py-2.5 text-center">
                 <span className="bg-emerald-500 text-white rounded px-1 text-xs font-black">R</span>
               </th>
@@ -698,6 +705,11 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                       <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
                     </div>
                   </div>
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <span className={`font-black text-sm ${p.jokersRemaining === 0 ? 'text-blue-800' : p.jokersRemaining <= 3 ? 'text-orange-400' : 'text-yellow-400'}`}>
+                    {p.jokersRemaining}
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-center font-bold text-emerald-400">{p.r || '–'}</td>
                 <td className="px-3 py-3 text-center font-bold text-emerald-300">{p.rj || '–'}</td>
