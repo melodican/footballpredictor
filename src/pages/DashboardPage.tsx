@@ -110,7 +110,7 @@ export default function DashboardPage() {
       const preds = predsByParticipant[p.id] || []
       let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0, jokersUsed = 0
       for (const pred of preds) {
-        if (pred.is_joker) jokersUsed++
+        if (pred.is_joker && resultsMap[pred.fixture_id]) jokersUsed++
         const result = resultsMap[pred.fixture_id]
         if (!result) continue
         played++
