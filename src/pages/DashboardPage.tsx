@@ -445,7 +445,7 @@ function UpcomingFixturesSection({ date, fixtures, leaderboard, predsByParticipa
                   <div key={participant.id} className="px-3 py-1.5 flex items-center gap-2 text-xs">
                     <PlayerAvatar name={participant.name} size="sm" />
                     <span className="text-blue-200 font-semibold flex-1 truncate">{participant.name}</span>
-                    <div className="flex items-center gap-1 w-20 justify-end">
+                    <div className="flex items-center gap-1 w-20">
                       <span className="font-black text-white whitespace-nowrap">{pred.home_score}–{pred.away_score}</span>
                       {pred.is_joker && (
                         <span className="text-yellow-400 font-black bg-yellow-400/10 px-1 py-0.5 rounded whitespace-nowrap">★J</span>
