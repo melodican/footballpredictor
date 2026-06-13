@@ -383,7 +383,7 @@ function useCountdown(targetUtc?: string) {
 function CountdownBadge({ kickoffUtc }: { kickoffUtc?: string }) {
   const t = useCountdown(kickoffUtc)
   if (!kickoffUtc) return null
-  if (!t) return <span className="text-xs font-bold text-red-400 bg-red-900/30 px-2 py-0.5 rounded-full">LIVE / PLAYED</span>
+  if (!t) return <span className="text-xs font-bold text-orange-400 bg-orange-900/30 px-2 py-0.5 rounded-full">⏱ Awaiting result</span>
 
   const isImminent = t.diff < 3600000 // under 1 hour
   const isToday = t.h < 24
