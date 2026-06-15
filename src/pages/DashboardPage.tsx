@@ -850,16 +850,18 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
               return (
                 <div key={f.id} className="flex items-center gap-2 text-xs py-1 border-b border-blue-900/40 last:border-0">
                   <span className="flex-1 text-right text-blue-200 truncate">{TEAM_FLAGS[f.homeTeam]} {f.homeTeam}</span>
-                  <span className="font-black text-white min-w-[40px] text-center">
+                  <span className="font-black text-white w-12 text-center whitespace-nowrap flex-shrink-0">
                     {pred ? `${pred.home_score}–${pred.away_score}` : '–'}
                   </span>
                   <span className="flex-1 text-blue-200 truncate">{f.awayTeam} {TEAM_FLAGS[f.awayTeam]}</span>
-                  {pred?.is_joker && <span className="text-yellow-400 font-black">★</span>}
-                  {scored && (
-                    <span className={`ml-1 px-1.5 py-0.5 rounded font-black ${labelColor(scored.label)}`}>
-                      {scored.label === null ? '–' : scored.label}{scored.points > 0 ? ` +${scored.points}` : ''}
-                    </span>
-                  )}
+                  <div className="w-20 flex items-center justify-end gap-1 flex-shrink-0">
+                    {pred?.is_joker && <span className="text-yellow-400 font-black">★</span>}
+                    {scored ? (
+                      <span className={`px-1.5 py-0.5 rounded font-black ${labelColor(scored.label)}`}>
+                        {scored.label === null ? '–' : scored.label}{scored.points > 0 ? ` +${scored.points}` : ''}
+                      </span>
+                    ) : <span className="w-12" />}
+                  </div>
                 </div>
               )
             })}
