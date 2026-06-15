@@ -893,9 +893,13 @@ function generateTickerItems(
     ]
   }
 
+  // Only look at the last 4 results for match-specific commentary
+  const last4FixtureIds = new Set([...results].reverse().slice(0, 4).map(r => r.fixture_id))
+
   const leader = leaderboard[0]
   const bottom = leaderboard[leaderboard.length - 1]
   const second = leaderboard[1]
+  const third = leaderboard[2]
 
   // ── Leader shoutout
   if (leader) {
@@ -921,6 +925,11 @@ function generateTickerItems(
     }
   }
 
+  // ── Top 3 standings summary
+  if (leader && second && third) {
+    items.push(`📋 Top 3: 🥇 ${leader.name} (${leader.total}pts) · 🥈 ${second.name} (${second.total}pts) · 🥉 ${third.name} (${third.total}pts)`)
+  }
+
   // ── Bottom of the table
   if (bottom && bottom.id !== leader?.id) {
     if (bottom.total === 0 && results.length > 0) {
@@ -939,15 +948,15 @@ function generateTickerItems(
     }
   }
 
-  // ── Exact score hits (correct scores)
+  // ── Exact score hits from last 4 games only
   for (const p of leaderboard) {
     for (const pred of (predsByParticipant[p.id] || [])) {
+      if (!last4FixtureIds.has(pred.fixture_id)) continue
       const result = resultsMap[pred.fixture_id]
       if (!result) continue
       const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
       const f = fixtures.find(x => x.id === pred.fixture_id)
       if (!f) continue
-
       if (scored.label === 'SJ') {
         items.push(pick([
           `💰 JACKPOT! ${p.name} played the Joker on ${f.homeTeam} vs ${f.awayTeam} AND got the exact score — a massive ${scored.points} points!`,
@@ -964,9 +973,10 @@ function generateTickerItems(
     }
   }
 
-  // ── Joker correct result (RJ)
+  // ── Joker correct result (RJ) from last 4 games only
   for (const p of leaderboard) {
     for (const pred of (predsByParticipant[p.id] || [])) {
+      if (!last4FixtureIds.has(pred.fixture_id)) continue
       const result = resultsMap[pred.fixture_id]
       if (!result) continue
       const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
@@ -981,10 +991,24 @@ function generateTickerItems(
     }
   }
 
-  // ── Dry spells (streak without a point)
+  // ── Recent match results (last 4 only)
+  for (const result of [...results].reverse().slice(0, 4)) {
+    const f = fixtures.find(x => x.id === result.fixture_id)
+    if (!f) continue
+    const home = result.home_score, away = result.away_score
+    let flavour = ''
+    const diff = Math.abs(home - away)
+    if (diff >= 4) flavour = pick([' — what a hammering!', ' — absolutely clinical', ' — no contest'])
+    else if (diff === 0) flavour = pick([' — honours even', ' — a point each', ' — all square'])
+    else if (diff === 1) flavour = pick([' — a nervy one', ' — tight as you like', ' — couldn\'t separate them'])
+    items.push(`${TEAM_FLAGS[f.homeTeam]} ${f.homeTeam} ${home}–${away} ${f.awayTeam} ${TEAM_FLAGS[f.awayTeam]}${flavour}`)
+  }
+
+  // ── Dry spells (based on last 4 games)
   for (const p of leaderboard) {
     let streak = 0
     for (const pred of [...(predsByParticipant[p.id] || [])].reverse()) {
+      if (!last4FixtureIds.has(pred.fixture_id)) continue
       const result = resultsMap[pred.fixture_id]
       if (!result) continue
       const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
@@ -1000,41 +1024,36 @@ function generateTickerItems(
     }
   }
 
-  // ── Someone on a hot streak
+  // ── Hot streak (last 4 games)
   for (const p of leaderboard) {
     let streak = 0
     for (const pred of [...(predsByParticipant[p.id] || [])].reverse()) {
+      if (!last4FixtureIds.has(pred.fixture_id)) continue
       const result = resultsMap[pred.fixture_id]
       if (!result) continue
       const scored = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
       if (scored.points > 0) streak++
       else break
     }
-    if (streak >= 4) {
+    if (streak >= 3) {
       items.push(pick([
-        `🔥 ${p.name} is on fire — points in ${streak} consecutive games`,
-        `📈 ${p.name} on a ${streak}-game scoring streak. Unstoppable right now`,
+        `🔥 ${p.name} is on fire — points in ${streak} of the last 4 games`,
+        `📈 ${p.name} in red-hot form right now. ${streak} games scoring in a row`,
       ]))
     }
   }
 
-  // ── Recent match results (last 6)
-  for (const result of [...results].reverse().slice(0, 6)) {
-    const f = fixtures.find(x => x.id === result.fixture_id)
-    if (!f) continue
-    const home = result.home_score, away = result.away_score
-    let flavour = ''
-    const diff = Math.abs(home - away)
-    if (diff >= 4) flavour = pick([' — what a hammering!', ' — absolutely clinical', ' — no contest'])
-    else if (diff === 0) flavour = pick([' — honours even', ' — a point each', ' — all square'])
-    else if (diff === 1) flavour = pick([' — a nervy one', ' — tight as you like', ' — couldn\'t separate them'])
-    items.push(`${TEAM_FLAGS[f.homeTeam]} ${f.homeTeam} ${home}–${away} ${f.awayTeam} ${TEAM_FLAGS[f.awayTeam]}${flavour}`)
-  }
-
-  // ── Overall stats summary
+  // ── Total correct scores overall
   const totalCorrectScores = leaderboard.reduce((sum, p) => sum + p.s + p.sj, 0)
   if (totalCorrectScores > 0) {
-    items.push(`🎯 ${totalCorrectScores} exact scores predicted correctly across the whole tournament so far`)
+    items.push(`🎯 ${totalCorrectScores} exact score${totalCorrectScores !== 1 ? 's' : ''} predicted correctly so far — who's the oracle?`)
+  }
+
+  // ── Jokers remaining leader
+  const mostJokers = [...leaderboard].sort((a, b) => b.jokersRemaining - a.jokersRemaining)[0]
+  const fewestJokers = [...leaderboard].sort((a, b) => a.jokersRemaining - b.jokersRemaining)[0]
+  if (mostJokers && fewestJokers && mostJokers.id !== fewestJokers.id) {
+    items.push(`🃏 ${fewestJokers.name} is down to ${fewestJokers.jokersRemaining} joker${fewestJokers.jokersRemaining !== 1 ? 's' : ''} remaining — choose wisely!`)
   }
 
   // ── Shuffle so it doesn't repeat the same order every load
