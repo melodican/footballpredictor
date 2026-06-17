@@ -142,7 +142,7 @@ export default function DashboardPage() {
         s, sj, r, rj, played,
         jokersRemaining: 12 - jokersUsed,
       }
-    }).sort((a, b) => b.total - a.total)
+    }).sort((a, b) => b.total - a.total || b.s - a.s || b.r - a.r)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
 
   // Upcoming fixtures — next date with unplayed games
