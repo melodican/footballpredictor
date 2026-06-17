@@ -723,11 +723,10 @@ function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
       const dots = last5.map(fid => {
         const pred = predMap[fid]
         const result = resultsMap[fid]
-        if (!pred || !result) return 'none'
+        if (!pred || !result) return { color: 'none', joker: false }
         const pts = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
-        if (pts >= 5) return 'gold'
-        if (pts > 0) return 'green'
-        return 'red'
+        const color = pts >= 5 ? 'gold' : pts > 0 ? 'green' : 'red'
+        return { color, joker: pred.is_joker }
       })
 
       return { ...p, formPts, dots }
@@ -735,16 +734,14 @@ function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
   }, [leaderboard, predsByParticipant, resultsMap])
 
   const dotColor: Record<string, string> = {
-    gold: 'bg-yellow-400',
-    green: 'bg-emerald-500',
-    red: 'bg-red-600',
-    none: 'bg-blue-900',
+    gold: 'bg-yellow-400 text-black',
+    green: 'bg-emerald-500 text-white',
+    red: 'bg-red-600 text-white',
+    none: 'bg-blue-900 text-blue-700',
   }
-  const dotTitle: Record<string, string> = {
-    gold: 'Correct score (+5)',
-    green: 'Correct result (+2)',
-    red: 'No points',
-    none: '–',
+  const dotTitle = (color: string, joker: boolean) => {
+    const base = color === 'gold' ? 'Correct score (+5)' : color === 'green' ? 'Correct result (+2)' : color === 'red' ? 'No points' : '–'
+    return joker ? `${base} — Joker ×2` : base
   }
 
   return (
@@ -758,6 +755,7 @@ function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" /> Score</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Result</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> Blank</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-900 ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0c1733] inline-flex items-center justify-center text-yellow-400 font-black" style={{ fontSize: '7px' }}>J</span> Joker</span>
         </div>
       </div>
       <div className="divide-y divide-blue-900/40">
@@ -771,7 +769,11 @@ function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
               <div className="font-bold text-sm truncate">{p.name}</div>
               <div className="flex gap-1 mt-1">
                 {p.dots.map((d, idx) => (
-                  <div key={idx} title={dotTitle[d]} className={`w-3 h-3 rounded-full ${dotColor[d]}`} />
+                  d.joker ? (
+                    <div key={idx} title={dotTitle(d.color, true)} className={`w-4 h-4 rounded-full flex items-center justify-center font-black ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0c1733] ${dotColor[d.color]}`} style={{ fontSize: '8px' }}>J</div>
+                  ) : (
+                    <div key={idx} title={dotTitle(d.color, false)} className={`w-3 h-3 rounded-full ${dotColor[d.color]}`} />
+                  )
                 ))}
               </div>
             </div>
