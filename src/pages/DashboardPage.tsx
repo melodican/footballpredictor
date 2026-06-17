@@ -575,6 +575,8 @@ function PositionChart({ participants, predsByParticipant, results }: {
     if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
   }, [snapshots.length])
 
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
   if (snapshots.length < 2) return null
 
   const nGames = snapshots.length
@@ -617,10 +619,12 @@ function PositionChart({ participants, predsByParticipant, results }: {
       <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
         <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏁 Race</div>
         <span className="text-sm font-black">Tournament Positions</span>
-        <span className="text-xs text-blue-400 ml-auto">{nGames} result{nGames !== 1 ? 's' : ''} in</span>
+        <span className="text-xs text-blue-400 ml-auto">
+          {selectedId ? <span className="text-yellow-400">Click again to reset</span> : `${nGames} result${nGames !== 1 ? 's' : ''} in · tap a face to focus`}
+        </span>
       </div>
       <div ref={scrollRef} className="overflow-x-auto bg-[#060d1f]">
-        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block', minWidth: W }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block', minWidth: W }} onClick={() => setSelectedId(null)}>
           {/* Clip paths for avatar photos */}
           <defs>
             {playerData.map(({ pi, endX, endY }) => (
@@ -662,32 +666,42 @@ function PositionChart({ participants, predsByParticipant, results }: {
           ))}
 
           {/* Lines + avatars */}
-          {playerData.map(({ p, pi, positions, color, endX, endY, avatarUrl }) => (
-            <g key={p.id}>
-              {/* Main line */}
-              <path
-                d={getPath(positions)}
-                fill="none"
-                stroke={color}
-                strokeWidth={2.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity={0.9}
-              />
-              {/* Avatar at end — always photo, coloured circle behind as fallback */}
-              <circle cx={endX} cy={endY} r={19} fill={color} opacity={0.3} />
-              <circle cx={endX} cy={endY} r={18} fill={color} />
-              <image
-                href={avatarUrl || ''}
-                x={endX - 18} y={endY - 18}
-                width={36} height={36}
-                clipPath={`url(#cc-${pi})`}
-                preserveAspectRatio="xMidYMid slice"
-              />
-              {/* Coloured ring */}
-              <circle cx={endX} cy={endY} r={18} fill="none" stroke={color} strokeWidth={2.5} />
-            </g>
-          ))}
+          {playerData.map(({ p, pi, positions, color, endX, endY, avatarUrl }) => {
+            const isSelected = selectedId === p.id
+            const isDimmed = selectedId !== null && !isSelected
+            return (
+              <g key={p.id} style={{ transition: 'opacity 0.2s' }} opacity={isDimmed ? 0.08 : 1}>
+                {/* Main line */}
+                <path
+                  d={getPath(positions)}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={isSelected ? 4 : 2.5}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+                {/* Avatar at end — always photo, coloured circle behind as fallback */}
+                <circle cx={endX} cy={endY} r={19} fill={color} opacity={0.3} />
+                <circle cx={endX} cy={endY} r={18} fill={color} />
+                <image
+                  href={avatarUrl || ''}
+                  x={endX - 18} y={endY - 18}
+                  width={36} height={36}
+                  clipPath={`url(#cc-${pi})`}
+                  preserveAspectRatio="xMidYMid slice"
+                />
+                {/* Coloured ring — thicker when selected */}
+                <circle cx={endX} cy={endY} r={18} fill="none" stroke={color} strokeWidth={isSelected ? 4 : 2.5} />
+                {/* Invisible click target over avatar */}
+                <circle
+                  cx={endX} cy={endY} r={20}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : p.id) }}
+                />
+              </g>
+            )
+          })}
         </svg>
       </div>
     </div>
