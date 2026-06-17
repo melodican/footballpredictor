@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
@@ -570,6 +570,11 @@ function PositionChart({ participants, predsByParticipant, results }: {
     })
   }, [sortedResults, participants, predsByParticipant])
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+  }, [snapshots.length])
+
   if (snapshots.length < 2) return null
 
   const nGames = snapshots.length
@@ -614,7 +619,7 @@ function PositionChart({ participants, predsByParticipant, results }: {
         <span className="text-sm font-black">Tournament Positions</span>
         <span className="text-xs text-blue-400 ml-auto">{nGames} result{nGames !== 1 ? 's' : ''} in</span>
       </div>
-      <div className="overflow-x-auto bg-[#060d1f]">
+      <div ref={scrollRef} className="overflow-x-auto bg-[#060d1f]">
         <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block', minWidth: W }}>
           {/* Clip paths for avatar photos */}
           <defs>
