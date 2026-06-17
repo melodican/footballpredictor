@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 // Map participant names to their photo filenames in /public/avatars/
-const AVATAR_MAP: Record<string, string> = {
+export const AVATAR_MAP: Record<string, string> = {
   'Maggie Swallow': '/avatars/maggie.jpg',
   'Glen Kirkham':   '/avatars/glen.jpg',
   'Joe Swallow':    '/avatars/joe.jpg',

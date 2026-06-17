@@ -5,7 +5,7 @@ import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fi
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture } from '../types'
 import { GROUPS } from '../types'
-import PlayerAvatar from '../components/PlayerAvatar'
+import PlayerAvatar, { AVATAR_MAP } from '../components/PlayerAvatar'
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
 
@@ -273,6 +273,11 @@ export default function DashboardPage() {
             {/* Leaderboard */}
             <LeaderboardSection leaderboard={leaderboard} />
 
+            {/* Position Chart */}
+            {results.length >= 2 && (
+              <PositionChart participants={participants} predsByParticipant={predsByParticipant} results={results} />
+            )}
+
             {/* Form Table */}
             {results.length >= 5 && (
               <FormTable leaderboard={leaderboard} predsByParticipant={predsByParticipant} resultsMap={resultsMap} />
@@ -514,6 +519,183 @@ function TopScorerRace({ race }: { race: Array<{ name: string; picked: number; g
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Position Chart (bump chart) ─────────────────────────────────────────────
+
+const PLAYER_COLORS = [
+  '#f43f5e', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
+  '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#34d399',
+  '#f87171', '#818cf8', '#e879f9', '#a3e635',
+]
+
+function getInitialsChart(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function PositionChart({ participants, predsByParticipant, results }: {
+  participants: Participant[]
+  predsByParticipant: Record<string, Prediction[]>
+  results: Result[]
+}) {
+  const sortedResults = useMemo(() =>
+    [...results].sort((a, b) => new Date(a.entered_at).getTime() - new Date(b.entered_at).getTime()),
+    [results]
+  )
+
+  // For each result, compute everyone's position up to that point
+  const snapshots = useMemo(() => {
+    return sortedResults.map((_, upTo) => {
+      const subMap: Record<string, { home_score: number; away_score: number }> = {}
+      for (const r of sortedResults.slice(0, upTo + 1)) {
+        subMap[r.fixture_id] = { home_score: r.home_score, away_score: r.away_score }
+      }
+      const scored = participants.map(p => {
+        const preds = predsByParticipant[p.id] || []
+        let pts = 0
+        for (const pred of preds) {
+          const res = subMap[pred.fixture_id]
+          if (!res) continue
+          pts += scoreFixture(
+            { home: pred.home_score, away: pred.away_score },
+            { home: res.home_score, away: res.away_score },
+            pred.is_joker
+          ).points
+        }
+        return { id: p.id, pts }
+      }).sort((a, b) => b.pts - a.pts)
+      const positions: Record<string, number> = {}
+      scored.forEach((p, i) => { positions[p.id] = i + 1 })
+      return positions
+    })
+  }, [sortedResults, participants, predsByParticipant])
+
+  if (snapshots.length < 2) return null
+
+  const nGames = snapshots.length
+  const nPlayers = participants.length
+  const STEP_X = 50
+  const STEP_Y = 36
+  const PAD_L = 28
+  const PAD_R = 72
+  const PAD_T = 22
+  const PAD_B = 22
+  const W = PAD_L + (nGames - 1) * STEP_X + PAD_R
+  const H = PAD_T + (nPlayers - 1) * STEP_Y + PAD_B
+
+  const xScale = (i: number) => PAD_L + i * STEP_X
+  const yScale = (pos: number) => PAD_T + (pos - 1) * STEP_Y
+
+  const getPath = (positions: number[]) => {
+    const pts = positions.map((pos, i) => ({ x: xScale(i), y: yScale(pos) }))
+    let d = `M ${pts[0].x},${pts[0].y}`
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = (pts[i - 1].x + pts[i].x) / 2
+      d += ` C ${cpx},${pts[i - 1].y} ${cpx},${pts[i].y} ${pts[i].x},${pts[i].y}`
+    }
+    return d
+  }
+
+  // Pre-compute per-player data
+  const playerData = participants.map((p, pi) => {
+    const positions = snapshots.map(s => s[p.id] ?? nPlayers)
+    const lastPos = positions[positions.length - 1]
+    const color = PLAYER_COLORS[pi % PLAYER_COLORS.length]
+    const endX = xScale(nGames - 1) + 36
+    const endY = yScale(lastPos)
+    const avatarUrl = AVATAR_MAP[p.name]
+    return { p, pi, positions, color, endX, endY, avatarUrl, lastPos }
+  })
+
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+        <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏁 Race</div>
+        <span className="text-sm font-black">Tournament Positions</span>
+        <span className="text-xs text-blue-400 ml-auto">{nGames} result{nGames !== 1 ? 's' : ''} in</span>
+      </div>
+      <div className="overflow-x-auto bg-[#060d1f]">
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block', minWidth: W }}>
+          {/* Clip paths for avatar photos */}
+          <defs>
+            {playerData.map(({ pi, endX, endY }) => (
+              <clipPath key={pi} id={`cc-${pi}`}>
+                <circle cx={endX} cy={endY} r={16} />
+              </clipPath>
+            ))}
+          </defs>
+
+          {/* Horizontal grid lines */}
+          {Array.from({ length: nPlayers }, (_, i) => (
+            <line key={i}
+              x1={PAD_L} y1={yScale(i + 1)}
+              x2={xScale(nGames - 1)} y2={yScale(i + 1)}
+              stroke="#1e3a6b" strokeWidth={0.5} strokeDasharray="3,5"
+            />
+          ))}
+
+          {/* Position labels on left */}
+          {Array.from({ length: nPlayers }, (_, i) => (
+            <text key={i} x={PAD_L - 6} y={yScale(i + 1) + 4}
+              textAnchor="end" fill="#334d7a" fontSize={10} fontWeight="700">
+              {i + 1}
+            </text>
+          ))}
+
+          {/* Game number labels on bottom */}
+          {snapshots.map((_, i) => (
+            (i === 0 || (i + 1) % 5 === 0 || i === nGames - 1) && (
+              <text key={i} x={xScale(i)} y={H - 4}
+                textAnchor="middle" fill="#334d7a" fontSize={9}>
+                {i + 1}
+              </text>
+            )
+          ))}
+
+          {/* Lines + dots + avatars */}
+          {playerData.map(({ p, pi, positions, color, endX, endY, avatarUrl }) => (
+            <g key={p.id}>
+              {/* Main line */}
+              <path
+                d={getPath(positions)}
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity={0.85}
+              />
+              {/* Dot per game */}
+              {positions.map((pos, i) => (
+                <circle key={i} cx={xScale(i)} cy={yScale(pos)} r={2.5} fill={color} />
+              ))}
+              {/* Avatar circle at end */}
+              <circle cx={endX} cy={endY} r={17} fill={color} opacity={0.25} />
+              <circle cx={endX} cy={endY} r={16} fill={color} />
+              {avatarUrl ? (
+                <image
+                  href={avatarUrl}
+                  x={endX - 16} y={endY - 16}
+                  width={32} height={32}
+                  clipPath={`url(#cc-${pi})`}
+                  preserveAspectRatio="xMidYMid slice"
+                />
+              ) : (
+                <text x={endX} y={endY + 4} textAnchor="middle"
+                  fill="white" fontSize={9} fontWeight="900">
+                  {getInitialsChart(p.name)}
+                </text>
+              )}
+              {/* Thin ring */}
+              <circle cx={endX} cy={endY} r={16} fill="none" stroke={color} strokeWidth={2} />
+            </g>
+          ))}
+        </svg>
       </div>
     </div>
   )
