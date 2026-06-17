@@ -44,7 +44,7 @@ export default function DashboardPage() {
     const [sRes, pRes, predRes, rRes] = await Promise.all([
       supabase.from('tournament_settings').select('*').eq('id', 1).single(),
       supabase.from('participants').select('*').order('submitted_at'),
-      supabase.from('predictions').select('*'),
+      supabase.from('predictions').select('*').limit(2000),
       supabase.from('results').select('*'),
     ])
     if (sRes.data) setSettings(sRes.data as TournamentSettings & { scorer_goals?: Record<string, number> })
