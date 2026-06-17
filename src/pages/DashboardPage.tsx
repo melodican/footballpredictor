@@ -532,11 +532,6 @@ const PLAYER_COLORS = [
   '#f87171', '#818cf8', '#e879f9', '#a3e635',
 ]
 
-function getInitialsChart(name: string) {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
 
 function PositionChart({ participants, predsByParticipant, results }: {
   participants: Participant[]
@@ -580,11 +575,11 @@ function PositionChart({ participants, predsByParticipant, results }: {
   const nGames = snapshots.length
   const nPlayers = participants.length
   const STEP_X = 50
-  const STEP_Y = 36
-  const PAD_L = 28
-  const PAD_R = 72
-  const PAD_T = 22
-  const PAD_B = 22
+  const STEP_Y = 40
+  const PAD_L = 38
+  const PAD_R = 76
+  const PAD_T = 24
+  const PAD_B = 24
   const W = PAD_L + (nGames - 1) * STEP_X + PAD_R
   const H = PAD_T + (nPlayers - 1) * STEP_Y + PAD_B
 
@@ -625,7 +620,7 @@ function PositionChart({ participants, predsByParticipant, results }: {
           <defs>
             {playerData.map(({ pi, endX, endY }) => (
               <clipPath key={pi} id={`cc-${pi}`}>
-                <circle cx={endX} cy={endY} r={16} />
+                <circle cx={endX} cy={endY} r={18} />
               </clipPath>
             ))}
           </defs>
@@ -641,10 +636,14 @@ function PositionChart({ participants, predsByParticipant, results }: {
 
           {/* Position labels on left */}
           {Array.from({ length: nPlayers }, (_, i) => (
-            <text key={i} x={PAD_L - 6} y={yScale(i + 1) + 4}
-              textAnchor="end" fill="#334d7a" fontSize={10} fontWeight="700">
-              {i + 1}
-            </text>
+            <g key={i}>
+              <text x={PAD_L - 8} y={yScale(i + 1) + 5}
+                textAnchor="end" fill="#94a3b8" fontSize={13} fontWeight="900"
+                fontFamily="system-ui, sans-serif">
+                {i + 1}
+              </text>
+              <line x1={PAD_L - 4} y1={yScale(i + 1)} x2={PAD_L} y2={yScale(i + 1)} stroke="#334d7a" strokeWidth={1} />
+            </g>
           ))}
 
           {/* Game number labels on bottom */}
@@ -657,7 +656,7 @@ function PositionChart({ participants, predsByParticipant, results }: {
             )
           ))}
 
-          {/* Lines + dots + avatars */}
+          {/* Lines + avatars */}
           {playerData.map(({ p, pi, positions, color, endX, endY, avatarUrl }) => (
             <g key={p.id}>
               {/* Main line */}
@@ -665,34 +664,23 @@ function PositionChart({ participants, predsByParticipant, results }: {
                 d={getPath(positions)}
                 fill="none"
                 stroke={color}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 strokeLinejoin="round"
                 strokeLinecap="round"
-                opacity={0.85}
+                opacity={0.9}
               />
-              {/* Dot per game */}
-              {positions.map((pos, i) => (
-                <circle key={i} cx={xScale(i)} cy={yScale(pos)} r={2.5} fill={color} />
-              ))}
-              {/* Avatar circle at end */}
-              <circle cx={endX} cy={endY} r={17} fill={color} opacity={0.25} />
-              <circle cx={endX} cy={endY} r={16} fill={color} />
-              {avatarUrl ? (
-                <image
-                  href={avatarUrl}
-                  x={endX - 16} y={endY - 16}
-                  width={32} height={32}
-                  clipPath={`url(#cc-${pi})`}
-                  preserveAspectRatio="xMidYMid slice"
-                />
-              ) : (
-                <text x={endX} y={endY + 4} textAnchor="middle"
-                  fill="white" fontSize={9} fontWeight="900">
-                  {getInitialsChart(p.name)}
-                </text>
-              )}
-              {/* Thin ring */}
-              <circle cx={endX} cy={endY} r={16} fill="none" stroke={color} strokeWidth={2} />
+              {/* Avatar at end — always photo, coloured circle behind as fallback */}
+              <circle cx={endX} cy={endY} r={19} fill={color} opacity={0.3} />
+              <circle cx={endX} cy={endY} r={18} fill={color} />
+              <image
+                href={avatarUrl || ''}
+                x={endX - 18} y={endY - 18}
+                width={36} height={36}
+                clipPath={`url(#cc-${pi})`}
+                preserveAspectRatio="xMidYMid slice"
+              />
+              {/* Coloured ring */}
+              <circle cx={endX} cy={endY} r={18} fill="none" stroke={color} strokeWidth={2.5} />
             </g>
           ))}
         </svg>
