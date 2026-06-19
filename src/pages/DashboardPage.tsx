@@ -275,7 +275,12 @@ export default function DashboardPage() {
 
             {/* Position Chart */}
             {results.length >= 2 && (
-              <PositionChart participants={participants} predsByParticipant={predsByParticipant} results={results} />
+              <PositionChart
+                participants={participants}
+                predsByParticipant={predsByParticipant}
+                results={results}
+                bonusPoints={Object.fromEntries(leaderboard.map(p => [p.id, p.groupWinnerPoints + p.tournamentWinnerPoints + p.goldenBootPoints]))}
+              />
             )}
 
             {/* Form Table */}
@@ -533,10 +538,11 @@ const PLAYER_COLORS = [
 ]
 
 
-function PositionChart({ participants, predsByParticipant, results }: {
+function PositionChart({ participants, predsByParticipant, results, bonusPoints }: {
   participants: Participant[]
   predsByParticipant: Record<string, Prediction[]>
   results: Result[]
+  bonusPoints: Record<string, number>
 }) {
   const sortedResults = useMemo(() =>
     [...results].sort((a, b) => new Date(a.entered_at).getTime() - new Date(b.entered_at).getTime()),
@@ -562,7 +568,7 @@ function PositionChart({ participants, predsByParticipant, results }: {
             pred.is_joker
           ).points
         }
-        return { id: p.id, pts }
+        return { id: p.id, pts: pts + (bonusPoints[p.id] ?? 0) }
       }).sort((a, b) => b.pts - a.pts)
       const positions: Record<string, number> = {}
       scored.forEach((p, i) => { positions[p.id] = i + 1 })
