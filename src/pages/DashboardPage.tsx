@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
-import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture } from '../types'
+import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture, Fixture } from '../types'
 import { GROUPS } from '../types'
 import PlayerAvatar, { AVATAR_MAP } from '../components/PlayerAvatar'
 
@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeGroup, setActiveGroup] = useState<Group | 'played'>('played')
+  const [activeGroup, setActiveGroup] = useState<Group>('A')
   const [expandedParticipant, setExpandedParticipant] = useState<string | null>(null)
 
   async function load() {
@@ -171,9 +171,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.goals - a.goals || b.picked - a.picked)
   }, [participants, settings])
 
-  const filteredFixtures = activeGroup === 'played'
-    ? FIXTURES.filter(f => resultsMap[f.id] !== undefined)
-    : FIXTURES_BY_GROUP[activeGroup]
+  const filteredFixtures = FIXTURES_BY_GROUP[activeGroup] ?? []
 
   if (loading) {
     return (
@@ -296,17 +294,43 @@ export default function DashboardPage() {
               <TopScorerRace race={topScorerRace} />
             )}
 
-            {/* Group filter */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              <FilterTab label="Results so far" active={activeGroup === 'played'} onClick={() => setActiveGroup('played')} />
-              {GROUPS.map(g => (
-                <FilterTab key={g} label={`Grp ${g}`} active={activeGroup === g} onClick={() => setActiveGroup(g)} />
-              ))}
-            </div>
+            {/* Results so far */}
+            <div className="ss-card overflow-hidden">
+              <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
+                <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">📋 Results</div>
+                <span className="text-sm font-black">Results so far</span>
+              </div>
+              {/* Group tabs */}
+              <div className="flex gap-2 overflow-x-auto px-4 py-3 border-b border-blue-900/60 scrollbar-hide">
+                {GROUPS.map(g => {
+                  const hasResults = FIXTURES_BY_GROUP[g].some(f => resultsMap[f.id])
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setActiveGroup(g)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
+                        activeGroup === g
+                          ? 'bg-red-600 text-white'
+                          : hasResults
+                            ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900'
+                            : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:bg-blue-900'
+                      }`}
+                    >
+                      Grp {g}
+                    </button>
+                  )
+                })}
+              </div>
 
-            {/* Fixture grid */}
-            {filteredFixtures.length > 0 ? (
-              <div className="space-y-3">
+              {/* League table */}
+              <GroupLeagueTable
+                group={activeGroup}
+                fixtures={filteredFixtures}
+                resultsMap={resultsMap}
+              />
+
+              {/* Fixtures */}
+              <div className="px-4 pb-4 space-y-3">
                 {filteredFixtures.map(fixture => (
                   <FixtureCard
                     key={fixture.id}
@@ -317,11 +341,7 @@ export default function DashboardPage() {
                   />
                 ))}
               </div>
-            ) : (
-              <div className="ss-card px-6 py-10 text-center text-blue-500 text-sm">
-                {activeGroup === 'played' ? 'No results entered yet.' : `No results yet for Group ${activeGroup}.`}
-              </div>
-            )}
+            </div>
 
             {/* All Predictions — expandable */}
             <div className="ss-card overflow-hidden">
@@ -709,6 +729,89 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
             )
           })}
         </svg>
+      </div>
+    </div>
+  )
+}
+
+// ─── Form Table ───────────────────────────────────────────────────────────────
+
+// ─── Group League Table ───────────────────────────────────────────────────────
+
+function GroupLeagueTable({ group, fixtures, resultsMap }: {
+  group: Group
+  fixtures: Fixture[]
+  resultsMap: Record<string, Result>
+}) {
+  const scores: Record<string, { home: number; away: number }> = {}
+  for (const f of fixtures) {
+    const r = resultsMap[f.id]
+    if (r) scores[f.id] = { home: r.home_score, away: r.away_score }
+  }
+  const playedCount = Object.keys(scores).length
+  if (playedCount === 0) {
+    return (
+      <div className="px-5 py-4 text-sm text-blue-600 italic border-b border-blue-900/40">
+        No results yet for Group {group}
+      </div>
+    )
+  }
+
+  const teams = [...new Set(fixtures.flatMap(f => [f.homeTeam, f.awayTeam]))]
+  const standings = calculateGroupStandings(teams, fixtures, scores)
+
+  return (
+    <div className="border-b border-blue-900/40">
+      <div className="px-4 pt-3 pb-1">
+        <div className="text-xs font-black uppercase tracking-widest text-blue-500 mb-2">Group {group} Table</div>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-blue-500 border-b border-blue-900/40">
+              <th className="text-left pb-1.5 font-semibold w-5">#</th>
+              <th className="text-left pb-1.5 font-semibold">Team</th>
+              <th className="text-center pb-1.5 font-semibold w-6">P</th>
+              <th className="text-center pb-1.5 font-semibold w-6">W</th>
+              <th className="text-center pb-1.5 font-semibold w-6">D</th>
+              <th className="text-center pb-1.5 font-semibold w-6">L</th>
+              <th className="text-center pb-1.5 font-semibold w-8">GF</th>
+              <th className="text-center pb-1.5 font-semibold w-8">GA</th>
+              <th className="text-center pb-1.5 font-semibold w-8">GD</th>
+              <th className="text-center pb-1.5 font-semibold w-8 text-yellow-400">Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {standings.map((t, i) => {
+              const isTop2 = i < 2
+              return (
+                <tr key={t.team} className={`border-b border-blue-900/20 last:border-0 ${isTop2 ? 'text-white' : 'text-blue-400'}`}>
+                  <td className="py-1.5">
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-black ${
+                      i === 0 ? 'bg-yellow-400 text-black' : i === 1 ? 'bg-blue-600 text-white' : 'text-blue-600'
+                    }`}>{i + 1}</span>
+                  </td>
+                  <td className="py-1.5 font-semibold">
+                    <span className="mr-1">{TEAM_FLAGS[t.team]}</span>{t.team}
+                  </td>
+                  <td className="text-center py-1.5">{t.played}</td>
+                  <td className="text-center py-1.5">{t.won}</td>
+                  <td className="text-center py-1.5">{t.drawn}</td>
+                  <td className="text-center py-1.5">{t.lost}</td>
+                  <td className="text-center py-1.5">{t.gf}</td>
+                  <td className="text-center py-1.5">{t.ga}</td>
+                  <td className={`text-center py-1.5 font-semibold ${t.gd > 0 ? 'text-emerald-400' : t.gd < 0 ? 'text-red-400' : ''}`}>
+                    {t.gd > 0 ? '+' : ''}{t.gd}
+                  </td>
+                  <td className="text-center py-1.5 font-black text-yellow-400">{t.points}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <div className="flex items-center gap-3 mt-2 mb-3 text-xs text-blue-600">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" /> Qualify (1st)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Qualify (2nd)</span>
+          <span className="text-blue-700 ml-auto">FIFA 2026 rules apply</span>
+        </div>
       </div>
     </div>
   )
@@ -1366,10 +1469,4 @@ function FixtureCard({ fixture, result, leaderboard, predsByParticipant }: {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function FilterTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
-      active ? 'bg-red-600 text-white shadow-md shadow-red-900/40' : 'bg-blue-950 border border-blue-900 text-blue-400 hover:border-blue-700'
-    }`}>{label}</button>
-  )
-}
+// Group tabs are now inline in the results section

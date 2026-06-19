@@ -38,10 +38,14 @@ export function calculateGroupStandings(
 
   const list = Object.values(s)
 
-  // Sort: points → head-to-head result → head-to-head GD → overall GD → goals scored
+  // FIFA 2026 official tiebreaker order:
+  // 1. Points  2. Overall GD  3. Overall GF
+  // 4. H2H points  5. H2H GD  6. H2H GF
   list.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points
-    // Head-to-head
+    if (b.gd !== a.gd) return b.gd - a.gd
+    if (b.gf !== a.gf) return b.gf - a.gf
+    // Head-to-head between tied teams
     const h2h = fixtures.find(f =>
       (f.homeTeam === a.team && f.awayTeam === b.team) ||
       (f.homeTeam === b.team && f.awayTeam === a.team),
@@ -50,16 +54,18 @@ export function calculateGroupStandings(
       const sc = scores[h2h.id]
       if (sc) {
         const aIsHome = h2h.homeTeam === a.team
-        const ah = aIsHome ? sc.home : sc.away
-        const ag = aIsHome ? sc.away : sc.home
-        if (ah > ag) return -1
-        if (ah < ag) return 1
-        const aHGD = ah - ag, bHGD = ag - ah
-        if (aHGD !== bHGD) return bHGD - aHGD
+        const aGF = aIsHome ? sc.home : sc.away
+        const aGA = aIsHome ? sc.away : sc.home
+        const bGF = aGA, bGA = aGF
+        const h2hPtsA = aGF > aGA ? 3 : aGF === aGA ? 1 : 0
+        const h2hPtsB = bGF > bGA ? 3 : bGF === bGA ? 1 : 0
+        if (h2hPtsB !== h2hPtsA) return h2hPtsB - h2hPtsA
+        const h2hGDA = aGF - aGA, h2hGDB = bGF - bGA
+        if (h2hGDB !== h2hGDA) return h2hGDB - h2hGDA
+        if (aGF !== bGF) return bGF - aGF
       }
     }
-    if (b.gd !== a.gd) return b.gd - a.gd
-    return b.gf - a.gf
+    return 0
   })
   return list
 }
