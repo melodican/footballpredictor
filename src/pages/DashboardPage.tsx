@@ -571,11 +571,15 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
 
   // For each result, compute everyone's position up to that point
   const snapshots = useMemo(() => {
+    const lastIdx = sortedResults.length - 1
     return sortedResults.map((_, upTo) => {
       const subMap: Record<string, { home_score: number; away_score: number }> = {}
       for (const r of sortedResults.slice(0, upTo + 1)) {
         subMap[r.fixture_id] = { home_score: r.home_score, away_score: r.away_score }
       }
+      // Only add bonus points (group winners etc.) on the final snapshot so
+      // historical positions aren't distorted by points that didn't exist yet
+      const isLatest = upTo === lastIdx
       const scored = participants.map(p => {
         const preds = predsByParticipant[p.id] || []
         let pts = 0
@@ -588,7 +592,7 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
             pred.is_joker
           ).points
         }
-        return { id: p.id, pts: pts + (bonusPoints[p.id] ?? 0) }
+        return { id: p.id, pts: pts + (isLatest ? (bonusPoints[p.id] ?? 0) : 0) }
       }).sort((a, b) => b.pts - a.pts)
       const positions: Record<string, number> = {}
       scored.forEach((p, i) => { positions[p.id] = i + 1 })
