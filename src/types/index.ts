@@ -38,6 +38,7 @@ export interface Result {
 export interface TournamentSettings {
   entries_open: boolean
   predictions_revealed: boolean
+  knockout_entries_open: boolean
   current_phase: 'group' | 'r32' | 'r16' | 'qf' | 'sf' | 'final'
 }
 

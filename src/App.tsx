@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import EnterPage from './pages/EnterPage'
+import EnterKnockoutPage from './pages/EnterKnockoutPage'
 import DashboardPage from './pages/DashboardPage'
 import AdminPage from './pages/AdminPage'
 import SubmittedPage from './pages/SubmittedPage'
@@ -11,6 +12,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/enter" element={<EnterPage />} />
+        <Route path="/enter-knockout" element={<EnterKnockoutPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/admin/:secret" element={<AdminPage />} />
         <Route path="/submitted" element={<SubmittedPage />} />

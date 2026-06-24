@@ -2,6 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
+import {
+  ALL_KNOCKOUT_FIXTURES, R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
+  KNOCKOUT_FIXTURE_IDS, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, type KnockoutFixture, type KnockoutRound,
+} from '../data/knockoutFixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture, Fixture } from '../types'
 import { GROUPS } from '../types'
@@ -19,6 +23,7 @@ interface PlayerRow extends Participant {
   goldenBootPoints: number
   s: number; sj: number; r: number; rj: number; played: number
   jokersRemaining: number
+  koJokersRemaining: number
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -108,9 +113,13 @@ export default function DashboardPage() {
   const leaderboard: PlayerRow[] = useMemo(() => {
     return participants.map(p => {
       const preds = predsByParticipant[p.id] || []
-      let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0, jokersUsed = 0
+      let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0, jokersUsed = 0, koJokersUsed = 0
       for (const pred of preds) {
-        if (pred.is_joker && resultsMap[pred.fixture_id]) jokersUsed++
+        const isKO = KNOCKOUT_FIXTURE_IDS.has(pred.fixture_id)
+        if (pred.is_joker && resultsMap[pred.fixture_id]) {
+          if (isKO) koJokersUsed++
+          else jokersUsed++
+        }
         const result = resultsMap[pred.fixture_id]
         if (!result) continue
         played++
@@ -141,6 +150,7 @@ export default function DashboardPage() {
         total: matchPoints + groupWinnerPoints + tournamentWinnerPoints + goldenBootPoints,
         s, sj, r, rj, played,
         jokersRemaining: 12 - jokersUsed,
+        koJokersRemaining: KO_JOKER_LIMIT - koJokersUsed,
       }
     }).sort((a, b) => b.total - a.total || b.s - a.s || b.r - a.r)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
@@ -284,6 +294,15 @@ export default function DashboardPage() {
             {/* Form Table */}
             {results.length >= 5 && (
               <FormTable leaderboard={leaderboard} predsByParticipant={predsByParticipant} resultsMap={resultsMap} />
+            )}
+
+            {/* Knockout Bracket */}
+            {(settings?.current_phase !== 'group') && (
+              <KnockoutBracket
+                resultsMap={resultsMap}
+                leaderboard={leaderboard}
+                predsByParticipant={predsByParticipant}
+              />
             )}
 
             {/* Points Guide */}
@@ -739,6 +758,201 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
 }
 
 // ─── Form Table ───────────────────────────────────────────────────────────────
+
+// ─── Knockout Bracket ─────────────────────────────────────────────────────────
+
+const ROUND_ORDER: KnockoutRound[] = ['R32', 'R16', 'QF', 'SF', 'F']
+const ROUND_FIXTURES: Record<KnockoutRound, KnockoutFixture[]> = {
+  R32: R32_FIXTURES,
+  R16: R16_FIXTURES,
+  QF:  QF_FIXTURES,
+  SF:  SF_FIXTURES,
+  F:   [FINAL_FIXTURE],
+}
+
+function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
+  resultsMap: Record<string, Result>
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+}) {
+  const [activeRound, setActiveRound] = useState<KnockoutRound>('R32')
+  const [expandedFixture, setExpandedFixture] = useState<string | null>(null)
+
+  const fixtures = ROUND_FIXTURES[activeRound]
+
+  // For each fixture, how many players predicted it and how does the group score
+  const koResultsMap = useMemo(() => {
+    const m: Record<string, Result> = {}
+    for (const [id, r] of Object.entries(resultsMap)) {
+      if (KNOCKOUT_FIXTURE_IDS.has(id)) m[id] = r
+    }
+    return m
+  }, [resultsMap])
+
+  const hasAnyKOResult = ALL_KNOCKOUT_FIXTURES.some(f => koResultsMap[f.id])
+
+  return (
+    <div className="ss-card overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-purple-900/60 to-blue-900/60 px-5 py-3 border-b border-purple-800/60 flex items-center gap-3">
+        <div className="bg-purple-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">⚔️ Knockout</div>
+        <span className="text-sm font-black">Knockout Stage</span>
+        <a
+          href="/enter-knockout"
+          className="ml-auto text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-full transition"
+        >
+          Enter Predictions →
+        </a>
+      </div>
+
+      {/* Round tabs */}
+      <div className="flex gap-2 overflow-x-auto px-4 py-3 border-b border-blue-900/60 scrollbar-hide">
+        {ROUND_ORDER.map(r => {
+          const roundFixtures = ROUND_FIXTURES[r]
+          const hasResult = roundFixtures.some(f => koResultsMap[f.id])
+          const isLive = roundFixtures.some(f => !koResultsMap[f.id] && f.homeTeam !== 'TBD')
+          return (
+            <button
+              key={r}
+              onClick={() => setActiveRound(r)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
+                activeRound === r
+                  ? 'bg-purple-600 text-white'
+                  : hasResult
+                    ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900'
+                    : isLive
+                      ? 'bg-purple-900/40 border border-purple-700/50 text-purple-300 hover:bg-purple-900/60'
+                      : 'bg-blue-900/40 border border-blue-800 text-blue-500 hover:bg-blue-900'
+              }`}
+            >
+              {ROUND_LABELS[r]}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Fixture list for active round */}
+      <div className="divide-y divide-blue-900/40">
+        {fixtures.map(f => (
+          <KOFixtureCard
+            key={f.id}
+            fixture={f}
+            result={koResultsMap[f.id]}
+            leaderboard={leaderboard}
+            predsByParticipant={predsByParticipant}
+            expanded={expandedFixture === f.id}
+            onToggle={() => setExpandedFixture(expandedFixture === f.id ? null : f.id)}
+          />
+        ))}
+      </div>
+
+      {!hasAnyKOResult && (
+        <div className="px-5 pb-4 pt-1">
+          <p className="text-xs text-blue-600 italic">Results will appear here as games are played · share <span className="text-purple-400">/enter-knockout</span> so everyone can submit their Round of 32 predictions</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expanded, onToggle }: {
+  fixture: KnockoutFixture
+  result?: Result
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const isTBD = fixture.homeTeam === 'TBD'
+  const kickoff = new Date(fixture.kickoffUtc)
+  const now = new Date()
+  const isPast = kickoff < now
+
+  const predRows = leaderboard.map(p => {
+    const pred = (predsByParticipant[p.id] || []).find(pr => pr.fixture_id === fixture.id)
+    if (!pred) return null
+    const scored = result
+      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      : null
+    return { player: p, pred, scored }
+  }).filter(Boolean) as { player: PlayerRow; pred: Prediction; scored: ReturnType<typeof scoreFixture> | null }[]
+
+  const hasAnyPred = predRows.length > 0
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-blue-900/20 transition text-left"
+        disabled={isTBD && !hasAnyPred}
+      >
+        {/* Match number badge */}
+        <div className="w-7 h-7 rounded-full bg-purple-900/60 border border-purple-700/40 flex items-center justify-center text-xs font-black text-purple-300 flex-shrink-0">
+          {fixture.matchNumber}
+        </div>
+
+        {/* Teams + result */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm">
+            <span className={`font-bold truncate ${isTBD ? 'text-blue-600 italic' : 'text-white'}`}>
+              {isTBD ? 'TBD' : <>{getTeamFlag(fixture.homeTeam)} {fixture.homeTeam}</>}
+            </span>
+            {result ? (
+              <span className="font-black text-yellow-400 flex-shrink-0">{result.home_score}–{result.away_score}</span>
+            ) : (
+              <span className="text-blue-700 font-black flex-shrink-0">vs</span>
+            )}
+            <span className={`font-bold truncate ${isTBD ? 'text-blue-600 italic' : 'text-white'}`}>
+              {isTBD ? 'TBD' : <>{fixture.awayTeam} {getTeamFlag(fixture.awayTeam)}</>}
+            </span>
+          </div>
+          <div className="text-xs text-blue-500 mt-0.5">
+            {kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+            {' · '}
+            {kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            {hasAnyPred && <span className="ml-2 text-purple-400">{predRows.length} predictions</span>}
+          </div>
+        </div>
+
+        {/* Status badge */}
+        {result ? (
+          <span className="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full flex-shrink-0">✓ Done</span>
+        ) : isPast && !isTBD ? (
+          <span className="text-xs font-bold text-orange-400 bg-orange-900/30 px-2 py-0.5 rounded-full flex-shrink-0">⏱ Awaiting</span>
+        ) : (
+          <span className="text-xs font-bold text-blue-600 bg-blue-900/30 px-2 py-0.5 rounded-full flex-shrink-0">
+            {isTBD ? '🔒 TBD' : 'Upcoming'}
+          </span>
+        )}
+
+        {hasAnyPred && <span className="text-blue-700 text-xs">{expanded ? '▲' : '▼'}</span>}
+      </button>
+
+      {/* Expanded predictions */}
+      {expanded && hasAnyPred && (
+        <div className="bg-[#060d1f] border-t border-blue-900/40 px-4 py-3 space-y-1.5">
+          <div className="text-xs font-black uppercase tracking-wider text-blue-500 mb-2">Predictions</div>
+          {predRows.map(({ player, pred, scored }) => (
+            <div key={player.id} className="flex items-center gap-2 text-xs py-1 border-b border-blue-900/30 last:border-0">
+              <span className="flex-1 text-right text-blue-200 truncate">{player.name}</span>
+              <div className="flex items-center gap-1 w-20 flex-shrink-0">
+                <span className="font-black text-white whitespace-nowrap">{pred.home_score}–{pred.away_score}</span>
+                {pred.is_joker && <span className="text-yellow-400 font-black text-xs bg-yellow-400/10 px-1 py-0.5 rounded whitespace-nowrap">★J</span>}
+              </div>
+              {scored ? (
+                <span className={`text-xs font-black px-1.5 py-0.5 rounded ${labelColor(scored.label)}`}>
+                  {scored.points > 0 ? `+${scored.points}` : scored.label || '–'}
+                </span>
+              ) : (
+                <span className="w-12 text-blue-700 text-xs text-center">–</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Group League Table ───────────────────────────────────────────────────────
 

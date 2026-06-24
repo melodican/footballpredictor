@@ -99,7 +99,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
     setTimeout(() => setMessage(''), 3000)
   }
 
-  async function toggleSetting(key: 'entries_open' | 'predictions_revealed') {
+  async function toggleSetting(key: 'entries_open' | 'predictions_revealed' | 'knockout_entries_open') {
     if (!settings) return
     setToggling(true)
     const newVal = !settings[key]
@@ -178,10 +178,35 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
               disabled={toggling}
               onToggle={() => toggleSetting('predictions_revealed')}
             />
-            <div className="glass rounded-2xl p-5 text-sm space-y-1">
-              <p className="font-bold text-white">Phase</p>
+            <ToggleCard
+              title="Knockout Entries Open"
+              description="Allow Round of 32 predictions at /enter-knockout"
+              value={settings.knockout_entries_open ?? false}
+              disabled={toggling}
+              onToggle={() => toggleSetting('knockout_entries_open')}
+            />
+            <div className="glass rounded-2xl p-5 text-sm space-y-3">
+              <p className="font-bold text-white">Tournament Phase</p>
               <p className="text-zinc-400">Currently: <span className="text-white font-semibold">{settings.current_phase}</span></p>
-              <p className="text-zinc-600 text-xs mt-1">Knockout phase management coming in Phase 2.</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['group', 'r32', 'r16', 'qf', 'sf', 'final'] as const).map(phase => (
+                  <button
+                    key={phase}
+                    onClick={async () => {
+                      await supabase.from('tournament_settings').update({ current_phase: phase }).eq('id', 1)
+                      setSettings(s => s ? { ...s, current_phase: phase } : s)
+                    }}
+                    className={`py-2 rounded-xl text-xs font-bold transition border ${
+                      settings.current_phase === phase
+                        ? 'bg-purple-600 border-purple-500 text-white'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-600'
+                    }`}
+                  >
+                    {phase.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <p className="text-zinc-600 text-xs">Switching to a knockout phase shows the bracket section on the dashboard.</p>
             </div>
 
             {/* Endgame — Tournament Winner + Golden Boot */}
