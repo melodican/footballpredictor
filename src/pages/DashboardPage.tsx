@@ -287,7 +287,7 @@ export default function DashboardPage() {
                 participants={participants}
                 predsByParticipant={predsByParticipant}
                 results={results}
-                bonusPoints={Object.fromEntries(leaderboard.map(p => [p.id, p.groupWinnerPoints + p.tournamentWinnerPoints + p.goldenBootPoints]))}
+                finalOrder={leaderboard.map(p => p.id)}
               />
             )}
 
@@ -577,11 +577,11 @@ const PLAYER_COLORS = [
 ]
 
 
-function PositionChart({ participants, predsByParticipant, results, bonusPoints }: {
+function PositionChart({ participants, predsByParticipant, results, finalOrder }: {
   participants: Participant[]
   predsByParticipant: Record<string, Prediction[]>
   results: Result[]
-  bonusPoints: Record<string, number>
+  finalOrder: string[]   // participant IDs in leaderboard order (position 1 first)
 }) {
   const sortedResults = useMemo(() =>
     [...results].sort((a, b) => new Date(a.entered_at).getTime() - new Date(b.entered_at).getTime()),
@@ -596,9 +596,17 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
       for (const r of sortedResults.slice(0, upTo + 1)) {
         subMap[r.fixture_id] = { home_score: r.home_score, away_score: r.away_score }
       }
-      // Only add bonus points (group winners etc.) on the final snapshot so
-      // historical positions aren't distorted by points that didn't exist yet
       const isLatest = upTo === lastIdx
+
+      // For the final snapshot, use the leaderboard's exact order (includes tiebreakers)
+      if (isLatest && finalOrder.length > 0) {
+        const positions: Record<string, number> = {}
+        finalOrder.forEach((id, i) => { positions[id] = i + 1 })
+        // Fill any participants not in finalOrder (shouldn't happen, but safe)
+        participants.forEach(p => { if (!(p.id in positions)) positions[p.id] = finalOrder.length + 1 })
+        return positions
+      }
+
       const scored = participants.map(p => {
         const preds = predsByParticipant[p.id] || []
         let pts = 0
@@ -611,7 +619,7 @@ function PositionChart({ participants, predsByParticipant, results, bonusPoints 
             pred.is_joker
           ).points
         }
-        return { id: p.id, pts: pts + (isLatest ? (bonusPoints[p.id] ?? 0) : 0) }
+        return { id: p.id, pts }
       }).sort((a, b) => b.pts - a.pts)
       const positions: Record<string, number> = {}
       scored.forEach((p, i) => { positions[p.id] = i + 1 })
