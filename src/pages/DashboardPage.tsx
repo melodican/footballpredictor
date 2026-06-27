@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import {
-  ALL_KNOCKOUT_FIXTURES, R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
+  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
   KNOCKOUT_FIXTURE_IDS, KNOCKOUT_FIXTURE_MAP, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, getWinner,
   type KnockoutFixture, type KnockoutRound,
 } from '../data/knockoutFixtures'
@@ -984,7 +984,6 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
     return m
   }, [resultsMap])
 
-  const hasAnyKOResult = ALL_KNOCKOUT_FIXTURES.some(f => koResultsMap[f.id])
 
   return (
     <div className="ss-card overflow-hidden">
@@ -1041,12 +1040,26 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
         ))}
       </div>
 
-      {!hasAnyKOResult && (
-        <div className="px-5 pb-4 pt-2 flex items-center gap-2">
-          <span className="text-lg">⏳</span>
-          <p className="text-xs text-blue-500">Scores will appear here as games are played. Get your predictions in before kick-off!</p>
-        </div>
-      )}
+      {(() => {
+        const roundInfo: Record<KnockoutRound, { jokers: number | null; note: string }> = {
+          R32: { jokers: 4,    note: '4 Jokers available this round' },
+          R16: { jokers: 3,    note: '3 Jokers available this round' },
+          QF:  { jokers: 2,    note: '2 Jokers available this round' },
+          SF:  { jokers: 1,    note: '1 Joker available this round' },
+          F:   { jokers: null, note: 'All points are doubled in the Final!' },
+        }
+        const info = roundInfo[activeRound]
+        const hasResults = ROUND_FIXTURES[activeRound].some(f => koResultsMap[f.id])
+        return (
+          <div className="px-5 pb-4 pt-3 flex items-center gap-2.5">
+            <span className="text-xl">{info.jokers !== null ? '🃏' : '🏆'}</span>
+            <div>
+              <p className="text-sm font-black text-yellow-400">{info.note}</p>
+              {!hasResults && <p className="text-xs text-blue-600 mt-0.5">Scores will appear here as games are played</p>}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
