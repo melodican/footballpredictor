@@ -295,7 +295,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
             </div>
 
             <div className="space-y-3">
-              {KO_ROUNDS.find(r => r.round === koRound)!.fixtures.map(f => {
+              {[...KO_ROUNDS.find(r => r.round === koRound)!.fixtures].sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc)).map(f => {
                 const r = results[f.id] || { home: '', away: '' }
                 const saved = savedMap[f.id]
                 const isSaving = saving === f.id

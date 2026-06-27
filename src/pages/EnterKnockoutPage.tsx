@@ -188,7 +188,7 @@ export default function EnterKnockoutPage() {
             <p className="text-xs text-blue-400 mt-0.5">Pick a score for every game · mark up to {KO_JOKER_LIMIT} as Jokers</p>
           </div>
           <div className="divide-y divide-blue-900/40">
-            {R32_FIXTURES.map(f => (
+            {[...R32_FIXTURES].sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc)).map(f => (
               <FixtureRow
                 key={f.id}
                 fixture={f}
