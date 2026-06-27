@@ -2,8 +2,20 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
+import {
+  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
+  getTeamFlag, ROUND_LABELS, type KnockoutRound,
+} from '../data/knockoutFixtures'
 import type { Result, TournamentSettings } from '../types'
 import { GROUPS } from '../types'
+
+const KO_ROUNDS: { round: KnockoutRound; fixtures: typeof R32_FIXTURES }[] = [
+  { round: 'R32', fixtures: R32_FIXTURES },
+  { round: 'R16', fixtures: R16_FIXTURES },
+  { round: 'QF',  fixtures: QF_FIXTURES },
+  { round: 'SF',  fixtures: SF_FIXTURES },
+  { round: 'F',   fixtures: [FINAL_FIXTURE] },
+]
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
 
@@ -40,7 +52,8 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
   const [message, setMessage] = useState('')
-  const [tab, setTab] = useState<'results' | 'groups' | 'scorers' | 'settings'>('results')
+  const [tab, setTab] = useState<'results' | 'knockout' | 'groups' | 'scorers' | 'settings'>('results')
+  const [koRound, setKoRound] = useState<KnockoutRound>('R32')
   const [scorerGoals, setScorerGoals] = useState<Record<string, string>>({})
   const [savingScorers, setSavingScorers] = useState(false)
   const [topScorerPicks, setTopScorerPicks] = useState<Array<{ name: string; count: number }>>([])
@@ -147,8 +160,8 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* Tabs */}
-        <div className="grid grid-cols-4 gap-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-1">
-          {([['results', '⚽ Results'], ['groups', '🏁 Groups'], ['scorers', '🏅 Scorers'], ['settings', '⚙️ Settings']] as const).map(([t, label]) => (
+        <div className="grid grid-cols-5 gap-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-1">
+          {([['results', '⚽ Groups'], ['knockout', '⚔️ KO'], ['groups', '🏁 Winners'], ['scorers', '🏅 Goals'], ['settings', '⚙️ Settings']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -253,6 +266,93 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
               >
                 {savingEndgame ? 'Saving…' : 'Save & Award Points'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Knockout Results */}
+        {tab === 'knockout' && (
+          <div className="space-y-4">
+            {/* Round tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {KO_ROUNDS.map(({ round, fixtures }) => {
+                const doneCount = fixtures.filter(f => savedMap[f.id]).length
+                return (
+                  <button
+                    key={round}
+                    onClick={() => setKoRound(round)}
+                    className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition ${
+                      koRound === round
+                        ? 'bg-gradient-to-r from-red-500 to-red-700 text-white shadow-md'
+                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-600'
+                    }`}
+                  >
+                    {ROUND_LABELS[round]}
+                    {doneCount > 0 && <span className="ml-1.5 opacity-70">{doneCount}/{fixtures.length}</span>}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="space-y-3">
+              {KO_ROUNDS.find(r => r.round === koRound)!.fixtures.map(f => {
+                const r = results[f.id] || { home: '', away: '' }
+                const saved = savedMap[f.id]
+                const isSaving = saving === f.id
+                const isTBD = f.homeTeam === 'TBD' && f.awayTeam === 'TBD'
+                return (
+                  <div
+                    key={f.id}
+                    className={`rounded-2xl p-4 border transition ${
+                      saved
+                        ? 'bg-emerald-500/5 border-emerald-500/30'
+                        : isTBD
+                          ? 'bg-zinc-900/40 border-zinc-800/50 opacity-60'
+                          : 'glass border-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                        Match {f.matchNumber} · {new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        {isTBD && <span className="ml-2 text-blue-600">TBD — enter when teams confirmed</span>}
+                      </span>
+                      {saved && <span className="text-emerald-400 text-xs font-bold">✓ saved</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 text-right">
+                        <span className="text-sm font-bold">{getTeamFlag(f.homeTeam)} {f.homeTeam}</span>
+                      </div>
+                      <input
+                        type="number" min={0} max={20} inputMode="numeric"
+                        value={r.home}
+                        onChange={e => setResults(prev => ({ ...prev, [f.id]: { ...r, home: e.target.value } }))}
+                        placeholder="0"
+                        className="score-input"
+                        disabled={isTBD}
+                      />
+                      <div className="text-zinc-600 font-black">–</div>
+                      <input
+                        type="number" min={0} max={20} inputMode="numeric"
+                        value={r.away}
+                        onChange={e => setResults(prev => ({ ...prev, [f.id]: { ...r, away: e.target.value } }))}
+                        placeholder="0"
+                        className="score-input"
+                        disabled={isTBD}
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-bold">{f.awayTeam} {getTeamFlag(f.awayTeam)}</span>
+                      </div>
+                      <button
+                        onClick={() => saveResult(f.id)}
+                        disabled={r.home === '' || r.away === '' || isSaving || isTBD}
+                        className="btn-gold px-4 py-2.5 rounded-xl text-sm flex-shrink-0"
+                      >
+                        {isSaving ? '…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
