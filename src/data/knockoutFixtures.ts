@@ -5,68 +5,76 @@ export type KnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | 'F'
 export interface KnockoutFixture {
   id: string
   round: KnockoutRound
-  matchNumber: number   // 1-16 for R32, 1-8 for R16, etc.
+  matchNumber: number
   homeTeam: string
   awayTeam: string
   date: string
   kickoffUtc: string
-  // Bracket position — which R16 slot this feeds into
-  feedsInto?: string
+  feedsInto?: string   // which R16/QF/SF/F match this feeds into
+  bracketSide: 'L' | 'R'  // left or right half of bracket
+  bracketSlot: number      // position within the round column (1-indexed from top)
 }
 
 // ─── Round of 32 ─────────────────────────────────────────────────────────────
-// Team names are placeholders — update with actual teams once bracket confirmed Saturday.
-// Use the exact strings that appear in TEAM_FLAGS so flags render correctly.
+// Times converted from BST (UK, UTC+1) to UTC
 
 export const R32_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_R32_1',  round: 'R32', matchNumber: 1,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-28', kickoffUtc: '2026-06-28T18:00:00Z', feedsInto: 'KO_R16_1' },
-  { id: 'KO_R32_2',  round: 'R32', matchNumber: 2,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-28', kickoffUtc: '2026-06-28T22:00:00Z', feedsInto: 'KO_R16_1' },
-  { id: 'KO_R32_3',  round: 'R32', matchNumber: 3,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-29', kickoffUtc: '2026-06-29T18:00:00Z', feedsInto: 'KO_R16_2' },
-  { id: 'KO_R32_4',  round: 'R32', matchNumber: 4,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-29', kickoffUtc: '2026-06-29T22:00:00Z', feedsInto: 'KO_R16_2' },
-  { id: 'KO_R32_5',  round: 'R32', matchNumber: 5,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-30', kickoffUtc: '2026-06-30T18:00:00Z', feedsInto: 'KO_R16_3' },
-  { id: 'KO_R32_6',  round: 'R32', matchNumber: 6,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-06-30', kickoffUtc: '2026-06-30T22:00:00Z', feedsInto: 'KO_R16_3' },
-  { id: 'KO_R32_7',  round: 'R32', matchNumber: 7,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-01', kickoffUtc: '2026-07-01T18:00:00Z', feedsInto: 'KO_R16_4' },
-  { id: 'KO_R32_8',  round: 'R32', matchNumber: 8,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-01', kickoffUtc: '2026-07-01T22:00:00Z', feedsInto: 'KO_R16_4' },
-  { id: 'KO_R32_9',  round: 'R32', matchNumber: 9,  homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-02', kickoffUtc: '2026-07-02T18:00:00Z', feedsInto: 'KO_R16_5' },
-  { id: 'KO_R32_10', round: 'R32', matchNumber: 10, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-02', kickoffUtc: '2026-07-02T22:00:00Z', feedsInto: 'KO_R16_5' },
-  { id: 'KO_R32_11', round: 'R32', matchNumber: 11, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-03', kickoffUtc: '2026-07-03T18:00:00Z', feedsInto: 'KO_R16_6' },
-  { id: 'KO_R32_12', round: 'R32', matchNumber: 12, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-03', kickoffUtc: '2026-07-03T22:00:00Z', feedsInto: 'KO_R16_6' },
-  { id: 'KO_R32_13', round: 'R32', matchNumber: 13, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-04', kickoffUtc: '2026-07-04T18:00:00Z', feedsInto: 'KO_R16_7' },
-  { id: 'KO_R32_14', round: 'R32', matchNumber: 14, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-04', kickoffUtc: '2026-07-04T22:00:00Z', feedsInto: 'KO_R16_7' },
-  { id: 'KO_R32_15', round: 'R32', matchNumber: 15, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-05', kickoffUtc: '2026-07-05T18:00:00Z', feedsInto: 'KO_R16_8' },
-  { id: 'KO_R32_16', round: 'R32', matchNumber: 16, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-05', kickoffUtc: '2026-07-05T22:00:00Z', feedsInto: 'KO_R16_8' },
+  // Left half of bracket (slots 1-8)
+  { id: 'KO_R32_1',  round: 'R32', matchNumber: 1,  homeTeam: 'Germany',              awayTeam: 'Paraguay',              date: '2026-06-29', kickoffUtc: '2026-06-29T20:30:00Z', feedsInto: 'KO_R16_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_R32_2',  round: 'R32', matchNumber: 2,  homeTeam: 'France',               awayTeam: 'Sweden',                date: '2026-06-30', kickoffUtc: '2026-06-30T21:00:00Z', feedsInto: 'KO_R16_1', bracketSide: 'L', bracketSlot: 2 },
+  { id: 'KO_R32_3',  round: 'R32', matchNumber: 3,  homeTeam: 'South Africa',         awayTeam: 'Canada',                date: '2026-06-28', kickoffUtc: '2026-06-28T19:00:00Z', feedsInto: 'KO_R16_2', bracketSide: 'L', bracketSlot: 3 },
+  { id: 'KO_R32_4',  round: 'R32', matchNumber: 4,  homeTeam: 'Netherlands',          awayTeam: 'Morocco',               date: '2026-06-30', kickoffUtc: '2026-06-30T01:00:00Z', feedsInto: 'KO_R16_2', bracketSide: 'L', bracketSlot: 4 },
+  { id: 'KO_R32_5',  round: 'R32', matchNumber: 5,  homeTeam: 'TBD',                  awayTeam: 'TBD',                   date: '2026-07-01', kickoffUtc: '2026-07-01T16:00:00Z', feedsInto: 'KO_R16_3', bracketSide: 'L', bracketSlot: 5 },
+  { id: 'KO_R32_6',  round: 'R32', matchNumber: 6,  homeTeam: 'Spain',                awayTeam: 'TBD',                   date: '2026-07-02', kickoffUtc: '2026-07-02T19:00:00Z', feedsInto: 'KO_R16_3', bracketSide: 'L', bracketSlot: 6 },
+  { id: 'KO_R32_7',  round: 'R32', matchNumber: 7,  homeTeam: 'USA',                  awayTeam: 'Bosnia and Herzegovina', date: '2026-07-02', kickoffUtc: '2026-07-02T00:00:00Z', feedsInto: 'KO_R16_4', bracketSide: 'L', bracketSlot: 7 },
+  { id: 'KO_R32_8',  round: 'R32', matchNumber: 8,  homeTeam: 'Belgium',              awayTeam: 'TBD',                   date: '2026-07-01', kickoffUtc: '2026-07-01T20:00:00Z', feedsInto: 'KO_R16_4', bracketSide: 'L', bracketSlot: 8 },
+  // Right half of bracket (slots 1-8)
+  { id: 'KO_R32_9',  round: 'R32', matchNumber: 9,  homeTeam: 'Brazil',               awayTeam: 'Japan',                 date: '2026-06-29', kickoffUtc: '2026-06-29T17:00:00Z', feedsInto: 'KO_R16_5', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_R32_10', round: 'R32', matchNumber: 10, homeTeam: "Côte d'Ivoire",        awayTeam: 'Norway',                date: '2026-06-30', kickoffUtc: '2026-06-30T17:00:00Z', feedsInto: 'KO_R16_5', bracketSide: 'R', bracketSlot: 2 },
+  { id: 'KO_R32_11', round: 'R32', matchNumber: 11, homeTeam: 'Mexico',               awayTeam: 'TBD',                   date: '2026-07-01', kickoffUtc: '2026-07-01T01:00:00Z', feedsInto: 'KO_R16_6', bracketSide: 'R', bracketSlot: 3 },
+  { id: 'KO_R32_12', round: 'R32', matchNumber: 12, homeTeam: 'TBD',                  awayTeam: 'TBD',                   date: '2026-07-03', kickoffUtc: '2026-07-02T23:00:00Z', feedsInto: 'KO_R16_6', bracketSide: 'R', bracketSlot: 4 },
+  { id: 'KO_R32_13', round: 'R32', matchNumber: 13, homeTeam: 'Argentina',            awayTeam: 'Cabo Verde',            date: '2026-07-04', kickoffUtc: '2026-07-03T22:00:00Z', feedsInto: 'KO_R16_7', bracketSide: 'R', bracketSlot: 5 },
+  { id: 'KO_R32_14', round: 'R32', matchNumber: 14, homeTeam: 'Australia',            awayTeam: 'Egypt',                 date: '2026-07-03', kickoffUtc: '2026-07-03T18:00:00Z', feedsInto: 'KO_R16_7', bracketSide: 'R', bracketSlot: 6 },
+  { id: 'KO_R32_15', round: 'R32', matchNumber: 15, homeTeam: 'Switzerland',          awayTeam: 'TBD',                   date: '2026-07-03', kickoffUtc: '2026-07-03T03:00:00Z', feedsInto: 'KO_R16_8', bracketSide: 'R', bracketSlot: 7 },
+  { id: 'KO_R32_16', round: 'R32', matchNumber: 16, homeTeam: 'TBD',                  awayTeam: 'TBD',                   date: '2026-07-04', kickoffUtc: '2026-07-04T01:30:00Z', feedsInto: 'KO_R16_8', bracketSide: 'R', bracketSlot: 8 },
 ]
 
 export const R16_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_R16_1', round: 'R16', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T20:00:00Z', feedsInto: 'KO_QF_1' },
-  { id: 'KO_R16_2', round: 'R16', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T20:00:00Z', feedsInto: 'KO_QF_1' },
-  { id: 'KO_R16_3', round: 'R16', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T20:00:00Z', feedsInto: 'KO_QF_2' },
-  { id: 'KO_R16_4', round: 'R16', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T20:00:00Z', feedsInto: 'KO_QF_2' },
-  { id: 'KO_R16_5', round: 'R16', matchNumber: 5, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T20:00:00Z', feedsInto: 'KO_QF_3' },
-  { id: 'KO_R16_6', round: 'R16', matchNumber: 6, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T20:00:00Z', feedsInto: 'KO_QF_3' },
-  { id: 'KO_R16_7', round: 'R16', matchNumber: 7, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T20:00:00Z', feedsInto: 'KO_QF_4' },
-  { id: 'KO_R16_8', round: 'R16', matchNumber: 8, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T20:00:00Z', feedsInto: 'KO_QF_4' },
+  { id: 'KO_R16_1', round: 'R16', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T19:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_R16_2', round: 'R16', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T22:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 2 },
+  { id: 'KO_R16_3', round: 'R16', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T19:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 3 },
+  { id: 'KO_R16_4', round: 'R16', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T22:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 4 },
+  { id: 'KO_R16_5', round: 'R16', matchNumber: 5, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T19:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_R16_6', round: 'R16', matchNumber: 6, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T22:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 2 },
+  { id: 'KO_R16_7', round: 'R16', matchNumber: 7, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T19:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 3 },
+  { id: 'KO_R16_8', round: 'R16', matchNumber: 8, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T22:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 4 },
 ]
 
 export const QF_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_QF_1', round: 'QF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T20:00:00Z', feedsInto: 'KO_SF_1' },
-  { id: 'KO_QF_2', round: 'QF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T20:00:00Z', feedsInto: 'KO_SF_1' },
-  { id: 'KO_QF_3', round: 'QF', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T20:00:00Z', feedsInto: 'KO_SF_2' },
-  { id: 'KO_QF_4', round: 'QF', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T20:00:00Z', feedsInto: 'KO_SF_2' },
+  { id: 'KO_QF_1', round: 'QF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T19:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_QF_2', round: 'QF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T22:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 2 },
+  { id: 'KO_QF_3', round: 'QF', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T19:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_QF_4', round: 'QF', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T22:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 2 },
 ]
 
 export const SF_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_SF_1', round: 'SF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-18', kickoffUtc: '2026-07-18T20:00:00Z', feedsInto: 'KO_F_1' },
-  { id: 'KO_SF_2', round: 'SF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-19', kickoffUtc: '2026-07-19T20:00:00Z', feedsInto: 'KO_F_1' },
+  { id: 'KO_SF_1', round: 'SF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-18', kickoffUtc: '2026-07-18T22:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_SF_2', round: 'SF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-19', kickoffUtc: '2026-07-19T22:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'R', bracketSlot: 1 },
 ]
 
 export const FINAL_FIXTURE: KnockoutFixture = {
-  id: 'KO_F_1', round: 'F', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-19', kickoffUtc: '2026-07-19T20:00:00Z',
+  id: 'KO_F_1', round: 'F', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD',
+  date: '2026-07-19', kickoffUtc: '2026-07-19T22:00:00Z',
+  bracketSide: 'L', bracketSlot: 1,
 }
 
 export const ALL_KNOCKOUT_FIXTURES: KnockoutFixture[] = [
   ...R32_FIXTURES, ...R16_FIXTURES, ...QF_FIXTURES, ...SF_FIXTURES, FINAL_FIXTURE,
 ]
+
+export const KNOCKOUT_FIXTURE_MAP: Record<string, KnockoutFixture> = Object.fromEntries(
+  ALL_KNOCKOUT_FIXTURES.map(f => [f.id, f])
+)
 
 export const KNOCKOUT_FIXTURE_IDS = new Set(ALL_KNOCKOUT_FIXTURES.map(f => f.id))
 
@@ -81,6 +89,14 @@ export const ROUND_LABELS: Record<KnockoutRound, string> = {
 }
 
 export function getTeamFlag(team: string): string {
-  if (team === 'TBD') return '🏳️'
+  if (!team || team === 'TBD') return '🏳️'
   return TEAM_FLAGS[team] ?? '🏳️'
+}
+
+/** Returns the winning team name given a result, or null if draw/no result */
+export function getWinner(fixture: KnockoutFixture, result: { home_score: number; away_score: number } | undefined): string | null {
+  if (!result) return null
+  if (result.home_score > result.away_score) return fixture.homeTeam
+  if (result.away_score > result.home_score) return fixture.awayTeam
+  return null
 }

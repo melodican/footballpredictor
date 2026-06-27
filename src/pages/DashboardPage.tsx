@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import {
   ALL_KNOCKOUT_FIXTURES, R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
-  KNOCKOUT_FIXTURE_IDS, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, type KnockoutFixture, type KnockoutRound,
+  KNOCKOUT_FIXTURE_IDS, KNOCKOUT_FIXTURE_MAP, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, getWinner,
+  type KnockoutFixture, type KnockoutRound,
 } from '../data/knockoutFixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
 import type { Participant, Prediction, Result, TournamentSettings, Group, ScoredFixture, Fixture } from '../types'
@@ -278,6 +279,11 @@ export default function DashboardPage() {
               />
             )}
 
+            {/* Knockout Bracket Tree — shown above leaderboard in knockout phase */}
+            {settings?.current_phase !== 'group' && (
+              <BracketTree resultsMap={resultsMap} />
+            )}
+
             {/* Leaderboard */}
             <LeaderboardSection leaderboard={leaderboard} />
 
@@ -296,8 +302,8 @@ export default function DashboardPage() {
               <FormTable leaderboard={leaderboard} predsByParticipant={predsByParticipant} resultsMap={resultsMap} />
             )}
 
-            {/* Knockout Bracket */}
-            {(settings?.current_phase !== 'group') && (
+            {/* Knockout detail list */}
+            {settings?.current_phase !== 'group' && (
               <KnockoutBracket
                 resultsMap={resultsMap}
                 leaderboard={leaderboard}
@@ -313,54 +319,16 @@ export default function DashboardPage() {
               <TopScorerRace race={topScorerRace} />
             )}
 
-            {/* Results so far */}
-            <div className="ss-card overflow-hidden">
-              <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
-                <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">📋 Results</div>
-                <span className="text-sm font-black">Results so far</span>
-              </div>
-              {/* Group tabs */}
-              <div className="flex gap-2 overflow-x-auto px-4 py-3 border-b border-blue-900/60 scrollbar-hide">
-                {GROUPS.map(g => {
-                  const hasResults = FIXTURES_BY_GROUP[g].some(f => resultsMap[f.id])
-                  return (
-                    <button
-                      key={g}
-                      onClick={() => setActiveGroup(g)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
-                        activeGroup === g
-                          ? 'bg-red-600 text-white'
-                          : hasResults
-                            ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900'
-                            : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:bg-blue-900'
-                      }`}
-                    >
-                      Grp {g}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* League table */}
-              <GroupLeagueTable
-                group={activeGroup}
-                fixtures={filteredFixtures}
-                resultsMap={resultsMap}
-              />
-
-              {/* Fixtures */}
-              <div className="px-4 pb-4 space-y-3">
-                {filteredFixtures.map(fixture => (
-                  <FixtureCard
-                    key={fixture.id}
-                    fixture={fixture}
-                    result={resultsMap[fixture.id]}
-                    leaderboard={leaderboard}
-                    predsByParticipant={predsByParticipant}
-                  />
-                ))}
-              </div>
-            </div>
+            {/* Group Stage Results — collapsible, collapsed by default in knockout phase */}
+            <GroupStageResults
+              activeGroup={activeGroup}
+              setActiveGroup={setActiveGroup}
+              filteredFixtures={filteredFixtures}
+              resultsMap={resultsMap}
+              leaderboard={leaderboard}
+              predsByParticipant={predsByParticipant}
+              defaultCollapsed={settings?.current_phase !== 'group'}
+            />
 
             {/* All Predictions — expandable */}
             <div className="ss-card overflow-hidden">
@@ -404,6 +372,70 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Group Stage Results (collapsible) ────────────────────────────────────────
+
+function GroupStageResults({ activeGroup, setActiveGroup, filteredFixtures, resultsMap, leaderboard, predsByParticipant, defaultCollapsed }: {
+  activeGroup: Group
+  setActiveGroup: (g: Group) => void
+  filteredFixtures: Fixture[]
+  resultsMap: Record<string, Result>
+  leaderboard: PlayerRow[]
+  predsByParticipant: Record<string, Prediction[]>
+  defaultCollapsed: boolean
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  return (
+    <div className="ss-card overflow-hidden">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3 hover:bg-blue-900/80 transition"
+      >
+        <div className="bg-red-600 text-white text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">📋 Groups</div>
+        <span className="text-sm font-black">Group Stage Results</span>
+        <span className="ml-auto text-blue-500 text-sm">{collapsed ? '▼ Show' : '▲ Hide'}</span>
+      </button>
+
+      {!collapsed && (
+        <>
+          {/* Group tabs */}
+          <div className="flex gap-2 overflow-x-auto px-4 py-3 border-b border-blue-900/60 scrollbar-hide">
+            {GROUPS.map(g => {
+              const hasResults = FIXTURES_BY_GROUP[g].some(f => resultsMap[f.id])
+              return (
+                <button
+                  key={g}
+                  onClick={() => setActiveGroup(g)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex-shrink-0 ${
+                    activeGroup === g
+                      ? 'bg-red-600 text-white'
+                      : hasResults
+                        ? 'bg-emerald-900/50 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900'
+                        : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:bg-blue-900'
+                  }`}
+                >
+                  Grp {g}
+                </button>
+              )
+            })}
+          </div>
+          <GroupLeagueTable group={activeGroup} fixtures={filteredFixtures} resultsMap={resultsMap} />
+          <div className="px-4 pb-4 space-y-3">
+            {filteredFixtures.map(fixture => (
+              <FixtureCard
+                key={fixture.id}
+                fixture={fixture}
+                result={resultsMap[fixture.id]}
+                leaderboard={leaderboard}
+                predsByParticipant={predsByParticipant}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -766,6 +798,161 @@ function PositionChart({ participants, predsByParticipant, results, finalOrder }
 }
 
 // ─── Form Table ───────────────────────────────────────────────────────────────
+
+// ─── Bracket Tree Visual ──────────────────────────────────────────────────────
+
+const LEFT_R32  = ['KO_R32_1','KO_R32_2','KO_R32_3','KO_R32_4','KO_R32_5','KO_R32_6','KO_R32_7','KO_R32_8']
+const RIGHT_R32 = ['KO_R32_9','KO_R32_10','KO_R32_11','KO_R32_12','KO_R32_13','KO_R32_14','KO_R32_15','KO_R32_16']
+const LEFT_R16  = ['KO_R16_1','KO_R16_2','KO_R16_3','KO_R16_4']
+const RIGHT_R16 = ['KO_R16_5','KO_R16_6','KO_R16_7','KO_R16_8']
+const LEFT_QF   = ['KO_QF_1','KO_QF_2']
+const RIGHT_QF  = ['KO_QF_3','KO_QF_4']
+const LEFT_SF   = ['KO_SF_1']
+const RIGHT_SF  = ['KO_SF_2']
+
+// Card height + gap in px
+const CARD_H = 52
+const GAP = 8
+const SLOT = CARD_H + GAP
+
+function bracketY(slot: number, totalSlots: number, containerSlots: number): number {
+  // Center a group of totalSlots items within a containerSlots-slot space
+  const offset = ((containerSlots - totalSlots) / 2) * SLOT
+  return offset + (slot - 1) * SLOT
+}
+
+function BracketMatchCard({ id, resultsMap }: { id: string; resultsMap: Record<string, Result> }) {
+  const fixture = KNOCKOUT_FIXTURE_MAP[id]
+  if (!fixture) return null
+  const result = resultsMap[id]
+  const winner = getWinner(fixture, result)
+  const isTBD = fixture.homeTeam === 'TBD' && fixture.awayTeam === 'TBD'
+
+  const teamRow = (team: string, score: number | null) => {
+    const isWinner = winner === team
+    return (
+      <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${isWinner ? 'bg-yellow-400/20' : ''}`}>
+        <span className="text-base leading-none">{getTeamFlag(team)}</span>
+        <span className={`text-xs font-bold truncate flex-1 ${isWinner ? 'text-yellow-300' : team === 'TBD' ? 'text-blue-700' : 'text-white'}`} style={{ maxWidth: 68 }}>
+          {team === 'TBD' ? 'TBD' : team.split(' ')[0]}
+        </span>
+        {score !== null && (
+          <span className={`text-xs font-black ml-auto ${isWinner ? 'text-yellow-300' : 'text-blue-300'}`}>{score}</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`border rounded-lg overflow-hidden flex-shrink-0 ${
+      result ? 'border-blue-700/60 bg-blue-950/80' : isTBD ? 'border-blue-900/30 bg-blue-950/20' : 'border-blue-800/60 bg-blue-950/60'
+    }`} style={{ width: 108, height: CARD_H }}>
+      <div className="flex flex-col justify-center h-full py-0.5">
+        {teamRow(fixture.homeTeam, result ? result.home_score : null)}
+        <div className="border-t border-blue-900/40 my-0.5" />
+        {teamRow(fixture.awayTeam, result ? result.away_score : null)}
+      </div>
+    </div>
+  )
+}
+
+function BracketColumn({ ids, containerSlots, resultsMap }: {
+  ids: string[]
+  containerSlots: number
+  resultsMap: Record<string, Result>
+}) {
+  return (
+    <div className="relative flex-shrink-0" style={{ width: 108, height: containerSlots * SLOT }}>
+      {ids.map((id, i) => {
+        const y = bracketY(i + 1, ids.length, containerSlots)
+        return (
+          <div key={id} className="absolute" style={{ top: y, left: 0 }}>
+            <BracketMatchCard id={id} resultsMap={resultsMap} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Connector lines between rounds
+function ConnectorLines({ fromIds, toIds, containerSlots, direction }: {
+  fromIds: string[]
+  toIds: string[]
+  containerSlots: number
+  direction: 'right' | 'left'
+}) {
+  const midCard = CARD_H / 2
+  const h = containerSlots * SLOT
+
+  return (
+    <div className="relative flex-shrink-0" style={{ width: 16, height: h }}>
+      <svg width={16} height={h}>
+        {toIds.map((_, ti) => {
+          const f1idx = ti * 2
+          const f2idx = ti * 2 + 1
+          const y1 = bracketY(f1idx + 1, fromIds.length, containerSlots) + midCard
+          const y2 = bracketY(f2idx + 1, fromIds.length, containerSlots) + midCard
+          const toY = bracketY(ti + 1, toIds.length, containerSlots) + midCard
+
+          const x1 = direction === 'right' ? 0 : 16
+          const x2 = direction === 'right' ? 16 : 0
+
+          return (
+            <g key={ti}>
+              <line x1={x1} y1={y1} x2={8} y2={y1} stroke="#1e3a6b" strokeWidth={1} />
+              <line x1={x1} y1={y2} x2={8} y2={y2} stroke="#1e3a6b" strokeWidth={1} />
+              <line x1={8} y1={y1} x2={8} y2={y2} stroke="#1e3a6b" strokeWidth={1} />
+              <line x1={8} y1={toY} x2={x2} y2={toY} stroke="#1e3a6b" strokeWidth={1} />
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+function BracketTree({ resultsMap }: { resultsMap: Record<string, Result> }) {
+  const slots = 8
+
+  return (
+    <div className="ss-card overflow-hidden">
+      <div className="bg-gradient-to-r from-yellow-900/40 to-blue-900/40 px-5 py-3 border-b border-yellow-800/40 flex items-center gap-3">
+        <div className="bg-yellow-600 text-black text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider">🏆 Bracket</div>
+        <span className="text-sm font-black">World Cup 2026 Knockouts</span>
+        <span className="text-xs text-blue-400 ml-auto">← scroll →</span>
+      </div>
+      <div className="overflow-x-auto scrollbar-hide bg-[#060d1f]">
+        <div className="flex items-center px-3 py-4 gap-0" style={{ minWidth: 900 }}>
+
+          {/* LEFT HALF: R32 → R16 → QF → SF */}
+          <BracketColumn ids={LEFT_R32} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={LEFT_R32} toIds={LEFT_R16} containerSlots={slots} direction="right"/>
+          <BracketColumn ids={LEFT_R16} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={LEFT_R16} toIds={LEFT_QF} containerSlots={slots} direction="right"/>
+          <BracketColumn ids={LEFT_QF} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={LEFT_QF} toIds={LEFT_SF} containerSlots={slots} direction="right"/>
+          <BracketColumn ids={LEFT_SF} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={LEFT_SF} toIds={['KO_F_1']} containerSlots={slots} direction="right"/>
+
+          {/* FINAL */}
+          <BracketColumn ids={['KO_F_1']} containerSlots={slots} resultsMap={resultsMap}/>
+
+          {/* RIGHT HALF: SF → QF → R16 → R32 */}
+          <ConnectorLines fromIds={RIGHT_SF} toIds={['KO_F_1']} containerSlots={slots} direction="left"/>
+          <BracketColumn ids={RIGHT_SF} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={RIGHT_QF} toIds={RIGHT_SF} containerSlots={slots} direction="left"/>
+          <BracketColumn ids={RIGHT_QF} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={RIGHT_R16} toIds={RIGHT_QF} containerSlots={slots} direction="left"/>
+          <BracketColumn ids={RIGHT_R16} containerSlots={slots} resultsMap={resultsMap}/>
+          <ConnectorLines fromIds={RIGHT_R32} toIds={RIGHT_R16} containerSlots={slots} direction="left"/>
+          <BracketColumn ids={RIGHT_R32} containerSlots={slots} resultsMap={resultsMap}/>
+
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ─── Knockout Bracket ─────────────────────────────────────────────────────────
 
