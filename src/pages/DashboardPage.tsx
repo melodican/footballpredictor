@@ -1028,7 +1028,7 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
 
       {/* Fixture list for active round */}
       <div className="divide-y divide-blue-900/40">
-        {fixtures.map(f => (
+        {[...fixtures].sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc)).map(f => (
           <KOFixtureCard
             key={f.id}
             fixture={f}
@@ -1042,8 +1042,9 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
       </div>
 
       {!hasAnyKOResult && (
-        <div className="px-5 pb-4 pt-1">
-          <p className="text-xs text-blue-600 italic">Results will appear here as games are played · share <span className="text-purple-400">/enter-knockout</span> so everyone can submit their Round of 32 predictions</p>
+        <div className="px-5 pb-4 pt-2 flex items-center gap-2">
+          <span className="text-lg">⏳</span>
+          <p className="text-xs text-blue-500">Scores will appear here as games are played. Get your predictions in before kick-off!</p>
         </div>
       )}
     </div>
