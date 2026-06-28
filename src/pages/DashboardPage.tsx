@@ -308,6 +308,7 @@ export default function DashboardPage() {
                 resultsMap={resultsMap}
                 leaderboard={leaderboard}
                 predsByParticipant={predsByParticipant}
+                revealed={revealed}
               />
             )}
 
@@ -965,10 +966,11 @@ const ROUND_FIXTURES: Record<KnockoutRound, KnockoutFixture[]> = {
   F:   [FINAL_FIXTURE],
 }
 
-function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
+function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant, revealed }: {
   resultsMap: Record<string, Result>
   leaderboard: PlayerRow[]
   predsByParticipant: Record<string, Prediction[]>
+  revealed: boolean
 }) {
   const [activeRound, setActiveRound] = useState<KnockoutRound>('R32')
   const [expandedFixture, setExpandedFixture] = useState<string | null>(null)
@@ -1036,6 +1038,7 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
             predsByParticipant={predsByParticipant}
             expanded={expandedFixture === f.id}
             onToggle={() => setExpandedFixture(expandedFixture === f.id ? null : f.id)}
+            revealed={revealed}
           />
         ))}
       </div>
@@ -1064,13 +1067,14 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant }: {
   )
 }
 
-function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expanded, onToggle }: {
+function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expanded, onToggle, revealed }: {
   fixture: KnockoutFixture
   result?: Result
   leaderboard: PlayerRow[]
   predsByParticipant: Record<string, Prediction[]>
   expanded: boolean
   onToggle: () => void
+  revealed: boolean
 }) {
   const isTBD = fixture.homeTeam === 'TBD'
   const kickoff = new Date(fixture.kickoffUtc)
@@ -1093,7 +1097,7 @@ function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expan
       <button
         onClick={onToggle}
         className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-blue-900/20 transition text-left"
-        disabled={isTBD && !hasAnyPred}
+        disabled={(isTBD && !hasAnyPred) || !revealed}
       >
         {/* Match number badge */}
         <div className="w-7 h-7 rounded-full bg-purple-900/60 border border-purple-700/40 flex items-center justify-center text-xs font-black text-purple-300 flex-shrink-0">
@@ -1119,7 +1123,7 @@ function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expan
             {kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
             {' · '}
             {kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            {hasAnyPred && <span className="ml-2 text-purple-400">{predRows.length} predictions</span>}
+            {hasAnyPred && revealed && <span className="ml-2 text-purple-400">{predRows.length} predictions</span>}
           </div>
         </div>
 
@@ -1134,11 +1138,11 @@ function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expan
           </span>
         )}
 
-        {hasAnyPred && <span className="text-blue-700 text-xs">{expanded ? '▲' : '▼'}</span>}
+        {hasAnyPred && revealed && <span className="text-blue-700 text-xs">{expanded ? '▲' : '▼'}</span>}
       </button>
 
       {/* Expanded predictions */}
-      {expanded && hasAnyPred && (
+      {expanded && hasAnyPred && revealed && (
         <div className="bg-[#060d1f] border-t border-blue-900/40 px-4 py-3 space-y-1.5">
           <div className="text-xs font-black uppercase tracking-wider text-blue-500 mb-2">Predictions</div>
           {predRows.map(({ player, pred, scored }) => (
