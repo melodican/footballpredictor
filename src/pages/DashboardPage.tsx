@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import {
   R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
-  KNOCKOUT_FIXTURE_IDS, KNOCKOUT_FIXTURE_MAP, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, getWinner,
+  KNOCKOUT_FIXTURE_IDS, KNOCKOUT_FIXTURE_MAP, BRACKET_SOURCES, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, getWinner,
   type KnockoutFixture, type KnockoutRound,
 } from '../data/knockoutFixtures'
 import { scoreFixture, labelColor, calculateGroupStandings, GROUP_WINNER_POINTS } from '../lib/scoring'
@@ -822,20 +822,37 @@ function bracketY(slot: number, totalSlots: number, containerSlots: number): num
   return offset + (slot - 1) * SLOT
 }
 
+// Resolve a team name for a bracket slot — if TBD, look up the winner of the feeding fixture
+function resolveTeam(team: string, side: 'home' | 'away', fixtureId: string, resultsMap: Record<string, Result>): string {
+  if (team !== 'TBD') return team
+  const sources = BRACKET_SOURCES[fixtureId]
+  if (!sources) return 'TBD'
+  const sourceId = sources[side]
+  const sourceFixture = KNOCKOUT_FIXTURE_MAP[sourceId]
+  if (!sourceFixture) return 'TBD'
+  return getWinner(sourceFixture, resultsMap[sourceId]) ?? 'TBD'
+}
+
 function BracketMatchCard({ id, resultsMap }: { id: string; resultsMap: Record<string, Result> }) {
   const fixture = KNOCKOUT_FIXTURE_MAP[id]
   if (!fixture) return null
   const result = resultsMap[id]
-  const winner = getWinner(fixture, result)
-  const isTBD = fixture.homeTeam === 'TBD' && fixture.awayTeam === 'TBD'
+
+  const homeTeam = resolveTeam(fixture.homeTeam, 'home', id, resultsMap)
+  const awayTeam = resolveTeam(fixture.awayTeam, 'away', id, resultsMap)
+  const winner = result
+    ? (result.home_score > result.away_score ? homeTeam : result.away_score > result.home_score ? awayTeam : null)
+    : null
+  const isTBD = homeTeam === 'TBD' && awayTeam === 'TBD'
 
   const teamRow = (team: string, score: number | null) => {
     const isWinner = winner === team
+    const stillTBD = team === 'TBD'
     return (
       <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${isWinner ? 'bg-yellow-400/20' : ''}`}>
         <span className="text-base leading-none">{getTeamFlag(team)}</span>
-        <span className={`text-xs font-bold truncate flex-1 ${isWinner ? 'text-yellow-300' : team === 'TBD' ? 'text-blue-700' : 'text-white'}`} style={{ maxWidth: 68 }}>
-          {team === 'TBD' ? 'TBD' : team.split(' ')[0]}
+        <span className={`text-xs font-bold truncate flex-1 ${isWinner ? 'text-yellow-300' : stillTBD ? 'text-blue-700' : 'text-white'}`} style={{ maxWidth: 68 }}>
+          {stillTBD ? 'TBD' : team.split(' ')[0]}
         </span>
         {score !== null && (
           <span className={`text-xs font-black ml-auto ${isWinner ? 'text-yellow-300' : 'text-blue-300'}`}>{score}</span>
@@ -849,9 +866,9 @@ function BracketMatchCard({ id, resultsMap }: { id: string; resultsMap: Record<s
       result ? 'border-blue-700/60 bg-blue-950/80' : isTBD ? 'border-blue-900/30 bg-blue-950/20' : 'border-blue-800/60 bg-blue-950/60'
     }`} style={{ width: 108, height: CARD_H }}>
       <div className="flex flex-col justify-center h-full py-0.5">
-        {teamRow(fixture.homeTeam, result ? result.home_score : null)}
+        {teamRow(homeTeam, result ? result.home_score : null)}
         <div className="border-t border-blue-900/40 my-0.5" />
-        {teamRow(fixture.awayTeam, result ? result.away_score : null)}
+        {teamRow(awayTeam, result ? result.away_score : null)}
       </div>
     </div>
   )

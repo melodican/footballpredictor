@@ -80,6 +80,25 @@ export const KNOCKOUT_FIXTURE_IDS = new Set(ALL_KNOCKOUT_FIXTURES.map(f => f.id)
 
 export const KO_JOKER_LIMIT = 4
 
+// Maps each fixture to the two fixtures whose winners play in it (home, away)
+export const BRACKET_SOURCES: Record<string, { home: string; away: string }> = {
+  KO_R16_1: { home: 'KO_R32_1',  away: 'KO_R32_2'  },
+  KO_R16_2: { home: 'KO_R32_3',  away: 'KO_R32_4'  },
+  KO_R16_3: { home: 'KO_R32_5',  away: 'KO_R32_6'  },
+  KO_R16_4: { home: 'KO_R32_7',  away: 'KO_R32_8'  },
+  KO_R16_5: { home: 'KO_R32_9',  away: 'KO_R32_10' },
+  KO_R16_6: { home: 'KO_R32_11', away: 'KO_R32_12' },
+  KO_R16_7: { home: 'KO_R32_13', away: 'KO_R32_14' },
+  KO_R16_8: { home: 'KO_R32_15', away: 'KO_R32_16' },
+  KO_QF_1:  { home: 'KO_R16_1',  away: 'KO_R16_2'  },
+  KO_QF_2:  { home: 'KO_R16_3',  away: 'KO_R16_4'  },
+  KO_QF_3:  { home: 'KO_R16_5',  away: 'KO_R16_6'  },
+  KO_QF_4:  { home: 'KO_R16_7',  away: 'KO_R16_8'  },
+  KO_SF_1:  { home: 'KO_QF_1',   away: 'KO_QF_2'   },
+  KO_SF_2:  { home: 'KO_QF_3',   away: 'KO_QF_4'   },
+  KO_F_1:   { home: 'KO_SF_1',   away: 'KO_SF_2'   },
+}
+
 export const ROUND_LABELS: Record<KnockoutRound, string> = {
   R32: 'Round of 32',
   R16: 'Round of 16',
