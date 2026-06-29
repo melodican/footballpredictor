@@ -822,15 +822,20 @@ function bracketY(slot: number, totalSlots: number, containerSlots: number): num
   return offset + (slot - 1) * SLOT
 }
 
+// Resolve winner of a fixture — uses pen_winner to break draws in knockouts
+function resolveWinner(sourceId: string, resultsMap: Record<string, Result>): string | null {
+  const result = resultsMap[sourceId]
+  if (!result) return null
+  if (result.home_score !== result.away_score) return getWinner(KNOCKOUT_FIXTURE_MAP[sourceId], result)
+  return result.pen_winner ?? null
+}
+
 // Resolve a team name for a bracket slot — if TBD, look up the winner of the feeding fixture
 function resolveTeam(team: string, side: 'home' | 'away', fixtureId: string, resultsMap: Record<string, Result>): string {
   if (team !== 'TBD') return team
   const sources = BRACKET_SOURCES[fixtureId]
   if (!sources) return 'TBD'
-  const sourceId = sources[side]
-  const sourceFixture = KNOCKOUT_FIXTURE_MAP[sourceId]
-  if (!sourceFixture) return 'TBD'
-  return getWinner(sourceFixture, resultsMap[sourceId]) ?? 'TBD'
+  return resolveWinner(sources[side], resultsMap) ?? 'TBD'
 }
 
 function BracketMatchCard({ id, resultsMap }: { id: string; resultsMap: Record<string, Result> }) {

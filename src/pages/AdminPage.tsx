@@ -45,7 +45,8 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [tournamentWinner, setTournamentWinner] = useState('')
   const [goldenBoot, setGoldenBoot] = useState('')
   const [savingEndgame, setSavingEndgame] = useState(false)
-  const [results, setResults] = useState<Record<string, { home: string; away: string }>>({})
+  const [results, setResults] = useState<Record<string, { home: string; away: string; penWinner?: string }>>({})
+  const [penWinners, setPenWinners] = useState<Record<string, string>>({})
   const [savedResults, setSavedResults] = useState<Result[]>([])
   const [participantCount, setParticipantCount] = useState(0)
   const [activeGroup, setActiveGroup] = useState<(typeof GROUPS)[number]>('A')
@@ -89,8 +90,13 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
     if (rRes.data) {
       setSavedResults(rRes.data as Result[])
       const m: Record<string, { home: string; away: string }> = {}
-      for (const r of rRes.data as Result[]) m[r.fixture_id] = { home: String(r.home_score), away: String(r.away_score) }
+      const pw: Record<string, string> = {}
+      for (const r of rRes.data as Result[]) {
+        m[r.fixture_id] = { home: String(r.home_score), away: String(r.away_score) }
+        if (r.pen_winner) pw[r.fixture_id] = r.pen_winner
+      }
       setResults(m)
+      setPenWinners(pw)
     }
     if (pRes.count !== null) setParticipantCount(pRes.count)
   }
@@ -101,7 +107,9 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
     const r = results[fixtureId]
     if (!r || r.home === '' || r.away === '') return
     setSaving(fixtureId)
-    const payload = { fixture_id: fixtureId, home_score: parseInt(r.home), away_score: parseInt(r.away) }
+    const isDraw = parseInt(r.home) === parseInt(r.away)
+    const pw = isDraw ? (penWinners[fixtureId] ?? null) : null
+    const payload = { fixture_id: fixtureId, home_score: parseInt(r.home), away_score: parseInt(r.away), pen_winner: pw }
     const { error } = await supabase.from('results').upsert(payload, { onConflict: 'fixture_id' })
     if (error) setMessage('Error: ' + error.message)
     else {
@@ -350,6 +358,21 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
                         {isSaving ? '…' : 'Save'}
                       </button>
                     </div>
+                    {/* Who progressed? — shown when scores are drawn */}
+                    {r.home !== '' && r.away !== '' && parseInt(r.home) === parseInt(r.away) && !isTBD && (
+                      <div className="mt-3 flex items-center gap-3">
+                        <span className="text-xs text-yellow-400 font-bold whitespace-nowrap">⚡ Who progressed?</span>
+                        <select
+                          value={penWinners[f.id] ?? ''}
+                          onChange={e => setPenWinners(prev => ({ ...prev, [f.id]: e.target.value }))}
+                          className="flex-1 bg-zinc-800 border border-yellow-600/50 rounded-lg px-3 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-yellow-400"
+                        >
+                          <option value="">Select team...</option>
+                          <option value={f.homeTeam}>{getTeamFlag(f.homeTeam)} {f.homeTeam}</option>
+                          <option value={f.awayTeam}>{getTeamFlag(f.awayTeam)} {f.awayTeam}</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )
               })}

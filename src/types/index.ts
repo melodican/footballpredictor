@@ -32,6 +32,7 @@ export interface Result {
   fixture_id: string
   home_score: number
   away_score: number
+  pen_winner?: string | null
   entered_at: string
 }
 
