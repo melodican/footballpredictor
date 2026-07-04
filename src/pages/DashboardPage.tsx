@@ -25,6 +25,13 @@ interface PlayerRow extends Participant {
   s: number; sj: number; r: number; rj: number; played: number
   jokersRemaining: number
   koJokersRemaining: number
+  // Per-stage points breakdown
+  groupPts: number
+  r32Pts: number
+  r16Pts: number
+  qfPts: number
+  sfPts: number
+  finalPts: number
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -115,6 +122,7 @@ export default function DashboardPage() {
     return participants.map(p => {
       const preds = predsByParticipant[p.id] || []
       let matchPoints = 0, s = 0, sj = 0, r = 0, rj = 0, played = 0, jokersUsed = 0, koJokersUsed = 0
+      let groupPts = 0, r32Pts = 0, r16Pts = 0, qfPts = 0, sfPts = 0, finalPts = 0
       for (const pred of preds) {
         const isKO = KNOCKOUT_FIXTURE_IDS.has(pred.fixture_id)
         if (pred.is_joker && resultsMap[pred.fixture_id]) {
@@ -134,6 +142,16 @@ export default function DashboardPage() {
         else if (scored.label === 'SJ') sj++
         else if (scored.label === 'R') r++
         else if (scored.label === 'RJ') rj++
+        // Stage breakdown
+        if (!isKO) groupPts += scored.points
+        else {
+          const round = KNOCKOUT_FIXTURE_MAP[pred.fixture_id]?.round
+          if (round === 'R32') r32Pts += scored.points
+          else if (round === 'R16') r16Pts += scored.points
+          else if (round === 'QF')  qfPts  += scored.points
+          else if (round === 'SF')  sfPts  += scored.points
+          else if (round === 'F')   finalPts += scored.points
+        }
       }
       let groupWinnerPoints = 0
       const myWinners = predictedGroupWinners[p.id] || {}
@@ -152,6 +170,8 @@ export default function DashboardPage() {
         s, sj, r, rj, played,
         jokersRemaining: 12 - jokersUsed,
         koJokersRemaining: KO_JOKER_LIMIT - koJokersUsed,
+        groupPts: groupPts + groupWinnerPoints,
+        r32Pts, r16Pts, qfPts, sfPts, finalPts,
       }
     }).sort((a, b) => b.total - a.total || b.s - a.s || b.r - a.r)
   }, [participants, predsByParticipant, resultsMap, predictedGroupWinners, actualGroupWinners])
@@ -1459,6 +1479,14 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                     <div>
                       <div className="font-bold">{p.name}</div>
                       <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                      <div className="flex gap-2 mt-0.5 flex-wrap">
+                        {p.groupPts > 0 && <span className="text-xs text-blue-400">Grp <span className="text-white font-bold">{p.groupPts}</span></span>}
+                        {p.r32Pts > 0 && <span className="text-xs text-blue-400">R32 <span className="text-white font-bold">{p.r32Pts}</span></span>}
+                        {p.r16Pts > 0 && <span className="text-xs text-blue-400">R16 <span className="text-white font-bold">{p.r16Pts}</span></span>}
+                        {p.qfPts > 0  && <span className="text-xs text-blue-400">QF <span className="text-white font-bold">{p.qfPts}</span></span>}
+                        {p.sfPts > 0  && <span className="text-xs text-blue-400">SF <span className="text-white font-bold">{p.sfPts}</span></span>}
+                        {p.finalPts > 0 && <span className="text-xs text-blue-400">Final <span className="text-white font-bold">{p.finalPts}</span></span>}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -1493,12 +1521,13 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
             <PlayerAvatar name={p.name} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{p.name}</div>
-              <div className="text-xs text-blue-400 flex gap-2">
-                <span className="text-emerald-400">R:{p.r}</span>
-                <span className="text-emerald-300">RJ:{p.rj}</span>
-                <span className="text-yellow-400">S:{p.s}</span>
-                <span className="text-yellow-300">SJ:{p.sj}</span>
-                {p.groupWinnerPoints > 0 && <span className="text-purple-400">GW:{p.groupWinnerPoints}</span>}
+              <div className="text-xs text-blue-400 flex gap-2 flex-wrap">
+                {p.groupPts > 0 && <span>Grp <span className="text-white font-bold">{p.groupPts}</span></span>}
+                {p.r32Pts > 0 && <span>R32 <span className="text-white font-bold">{p.r32Pts}</span></span>}
+                {p.r16Pts > 0 && <span>R16 <span className="text-white font-bold">{p.r16Pts}</span></span>}
+                {p.qfPts > 0  && <span>QF <span className="text-white font-bold">{p.qfPts}</span></span>}
+                {p.sfPts > 0  && <span>SF <span className="text-white font-bold">{p.sfPts}</span></span>}
+                {p.finalPts > 0 && <span>Final <span className="text-white font-bold">{p.finalPts}</span></span>}
               </div>
             </div>
             <div className={`font-black text-xl ${i === 0 ? 'gradient-text' : 'text-white'}`}>{p.total}</div>
