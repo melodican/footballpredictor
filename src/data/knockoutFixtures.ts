@@ -40,14 +40,14 @@ export const R32_FIXTURES: KnockoutFixture[] = [
 ]
 
 export const R16_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_R16_1', round: 'R16', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T19:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 1 },
-  { id: 'KO_R16_2', round: 'R16', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-08', kickoffUtc: '2026-07-08T22:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 2 },
-  { id: 'KO_R16_3', round: 'R16', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T19:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 3 },
-  { id: 'KO_R16_4', round: 'R16', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-09', kickoffUtc: '2026-07-09T22:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 4 },
-  { id: 'KO_R16_5', round: 'R16', matchNumber: 5, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T19:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 1 },
-  { id: 'KO_R16_6', round: 'R16', matchNumber: 6, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-10', kickoffUtc: '2026-07-10T22:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 2 },
-  { id: 'KO_R16_7', round: 'R16', matchNumber: 7, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T19:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 3 },
-  { id: 'KO_R16_8', round: 'R16', matchNumber: 8, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-11', kickoffUtc: '2026-07-11T22:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 4 },
+  { id: 'KO_R16_1', round: 'R16', matchNumber: 1, homeTeam: 'Paraguay',    awayTeam: 'France',   date: '2026-07-04', kickoffUtc: '2026-07-04T21:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_R16_2', round: 'R16', matchNumber: 2, homeTeam: 'Canada',      awayTeam: 'Morocco',  date: '2026-07-04', kickoffUtc: '2026-07-04T17:00:00Z', feedsInto: 'KO_QF_1', bracketSide: 'L', bracketSlot: 2 },
+  { id: 'KO_R16_3', round: 'R16', matchNumber: 3, homeTeam: 'Portugal',    awayTeam: 'Spain',    date: '2026-07-06', kickoffUtc: '2026-07-06T19:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 3 },
+  { id: 'KO_R16_4', round: 'R16', matchNumber: 4, homeTeam: 'USA',         awayTeam: 'Belgium',  date: '2026-07-07', kickoffUtc: '2026-07-07T00:00:00Z', feedsInto: 'KO_QF_2', bracketSide: 'L', bracketSlot: 4 },
+  { id: 'KO_R16_5', round: 'R16', matchNumber: 5, homeTeam: 'Brazil',      awayTeam: 'Norway',   date: '2026-07-05', kickoffUtc: '2026-07-05T20:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_R16_6', round: 'R16', matchNumber: 6, homeTeam: 'Mexico',      awayTeam: 'England',  date: '2026-07-06', kickoffUtc: '2026-07-06T00:00:00Z', feedsInto: 'KO_QF_3', bracketSide: 'R', bracketSlot: 2 },
+  { id: 'KO_R16_7', round: 'R16', matchNumber: 7, homeTeam: 'Argentina',   awayTeam: 'Egypt',    date: '2026-07-07', kickoffUtc: '2026-07-07T16:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 3 },
+  { id: 'KO_R16_8', round: 'R16', matchNumber: 8, homeTeam: 'Switzerland', awayTeam: 'Colombia', date: '2026-07-07', kickoffUtc: '2026-07-07T20:00:00Z', feedsInto: 'KO_QF_4', bracketSide: 'R', bracketSlot: 4 },
 ]
 
 export const QF_FIXTURES: KnockoutFixture[] = [
@@ -78,7 +78,23 @@ export const KNOCKOUT_FIXTURE_MAP: Record<string, KnockoutFixture> = Object.from
 
 export const KNOCKOUT_FIXTURE_IDS = new Set(ALL_KNOCKOUT_FIXTURES.map(f => f.id))
 
-export const KO_JOKER_LIMIT = 4
+export const KO_JOKER_LIMIT = 4 // R32 default (kept for dashboard compat)
+
+export const KO_ROUND_JOKER_LIMITS: Partial<Record<KnockoutRound, number>> = {
+  R32: 4,
+  R16: 3,
+  QF: 2,
+  SF: 1,
+  F: 1,
+}
+
+export const ROUND_FIXTURES: Partial<Record<KnockoutRound, KnockoutFixture[]>> = {
+  R32: R32_FIXTURES,
+  R16: R16_FIXTURES,
+  QF: QF_FIXTURES,
+  SF: SF_FIXTURES,
+  F: [FINAL_FIXTURE],
+}
 
 // Maps each fixture to the two fixtures whose winners play in it (home, away)
 export const BRACKET_SOURCES: Record<string, { home: string; away: string }> = {

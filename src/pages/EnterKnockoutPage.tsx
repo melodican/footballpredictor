@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
-  R32_FIXTURES, ROUND_LABELS, KO_JOKER_LIMIT, getTeamFlag, type KnockoutFixture,
+  ROUND_FIXTURES, ROUND_LABELS, KO_ROUND_JOKER_LIMITS, BRACKET_SOURCES,
+  KNOCKOUT_FIXTURE_MAP, getTeamFlag, getWinner, type KnockoutFixture, type KnockoutRound,
 } from '../data/knockoutFixtures'
-import type { Participant } from '../types'
+import type { Participant, Result, TournamentSettings } from '../types'
 
-const STORAGE_KEY = 'wc2026_knockout_draft'
+const STORAGE_KEY = (round: string) => `wc2026_knockout_draft_${round}`
 
 interface KOFormState {
   participantId: string
@@ -16,17 +17,28 @@ interface KOFormState {
 
 const EMPTY: KOFormState = { participantId: '', predictions: {}, jokers: new Set() }
 
+function resolveWinner(sourceId: string, resultsMap: Record<string, Result>): string | null {
+  const result = resultsMap[sourceId]
+  if (!result) return null
+  const fixture = KNOCKOUT_FIXTURE_MAP[sourceId]
+  if (!fixture) return null
+  if (result.home_score !== result.away_score) return getWinner(fixture, result)
+  return result.pen_winner ?? null
+}
+
+function resolveTeam(team: string, side: 'home' | 'away', fixtureId: string, resultsMap: Record<string, Result>): string {
+  if (team !== 'TBD') return team
+  const sources = BRACKET_SOURCES[fixtureId]
+  if (!sources) return 'TBD'
+  return resolveWinner(sources[side], resultsMap) ?? 'TBD'
+}
+
 export default function EnterKnockoutPage() {
   const navigate = useNavigate()
   const [participants, setParticipants] = useState<Participant[]>([])
-  const [form, setForm] = useState<KOFormState>(() => {
-    try {
-      const s = localStorage.getItem(STORAGE_KEY)
-      if (!s) return EMPTY
-      const p = JSON.parse(s)
-      return { ...p, jokers: new Set(p.jokers ?? []) }
-    } catch { return EMPTY }
-  })
+  const [results, setResults] = useState<Result[]>([])
+  const [currentRound, setCurrentRound] = useState<KnockoutRound | null>(null)
+  const [form, setForm] = useState<KOFormState>(EMPTY)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [entriesOpen, setEntriesOpen] = useState(true)
@@ -34,33 +46,74 @@ export default function EnterKnockoutPage() {
   const [existingPredIds, setExistingPredIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    supabase.from('tournament_settings').select('knockout_entries_open').eq('id', 1).single()
-      .then(({ data }) => {
-        if (data) setEntriesOpen((data as Record<string, boolean>).knockout_entries_open ?? true)
-        setChecking(false)
-      }, () => setChecking(false))
-    supabase.from('participants').select('*').order('name').then(({ data }) => {
-      if (data) setParticipants(data as Participant[])
+    Promise.all([
+      supabase.from('tournament_settings').select('knockout_entries_open,current_phase').eq('id', 1).single(),
+      supabase.from('participants').select('*').order('name'),
+      supabase.from('results').select('*'),
+    ]).then(([sRes, pRes, rRes]) => {
+      const data = sRes.data as (TournamentSettings & { current_phase?: string }) | null
+      if (data) {
+        setEntriesOpen(data.knockout_entries_open ?? true)
+        // Derive round from current_phase
+        const phaseToRound: Record<string, KnockoutRound> = {
+          r32: 'R32', r16: 'R16', qf: 'QF', sf: 'SF', final: 'F',
+        }
+        const round = phaseToRound[data.current_phase ?? ''] ?? 'R32'
+        setCurrentRound(round)
+
+        // Load draft for this round
+        try {
+          const s = localStorage.getItem(STORAGE_KEY(round))
+          if (s) {
+            const p = JSON.parse(s)
+            setForm({ ...p, jokers: new Set(p.jokers ?? []) })
+          }
+        } catch { /* ignore */ }
+      }
+      if (pRes.data) setParticipants(pRes.data as Participant[])
+      if (rRes.data) setResults(rRes.data as Result[])
+      setChecking(false)
     })
   }, [])
 
-  // When participant selected, check if they already have knockout predictions
+  const resultsMap = useMemo(() => {
+    const m: Record<string, Result> = {}
+    for (const r of results) m[r.fixture_id] = r
+    return m
+  }, [results])
+
+  const fixtures = useMemo(() => {
+    if (!currentRound) return []
+    const raw = ROUND_FIXTURES[currentRound] ?? []
+    return [...raw]
+      .map(f => ({
+        ...f,
+        homeTeam: resolveTeam(f.homeTeam, 'home', f.id, resultsMap),
+        awayTeam: resolveTeam(f.awayTeam, 'away', f.id, resultsMap),
+      }))
+      .sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc))
+  }, [currentRound, resultsMap])
+
+  const jokerLimit = currentRound ? (KO_ROUND_JOKER_LIMITS[currentRound] ?? 1) : 1
+
+  // Check existing predictions when participant changes
   useEffect(() => {
-    if (!form.participantId) { setExistingPredIds(new Set()); return }
-    const koIds = R32_FIXTURES.map(f => f.id)
+    if (!form.participantId || !currentRound) { setExistingPredIds(new Set()); return }
+    const ids = (ROUND_FIXTURES[currentRound] ?? []).map(f => f.id)
     supabase.from('predictions')
       .select('fixture_id')
       .eq('participant_id', form.participantId)
-      .in('fixture_id', koIds)
+      .in('fixture_id', ids)
       .then(({ data }) => {
         if (data) setExistingPredIds(new Set(data.map((r: { fixture_id: string }) => r.fixture_id)))
       })
-  }, [form.participantId])
+  }, [form.participantId, currentRound])
 
-  // Persist draft to localStorage
+  // Persist draft
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...form, jokers: [...form.jokers] }))
-  }, [form])
+    if (!currentRound) return
+    localStorage.setItem(STORAGE_KEY(currentRound), JSON.stringify({ ...form, jokers: [...form.jokers] }))
+  }, [form, currentRound])
 
   function setScore(fixtureId: string, side: 'home' | 'away', val: string) {
     const n = val === '' ? '' : Math.max(0, parseInt(val) || 0)
@@ -71,12 +124,12 @@ export default function EnterKnockoutPage() {
     setForm(f => {
       const j = new Set(f.jokers)
       if (j.has(fixtureId)) { j.delete(fixtureId) }
-      else if (j.size < KO_JOKER_LIMIT) { j.add(fixtureId) }
+      else if (j.size < jokerLimit) { j.add(fixtureId) }
       return { ...f, jokers: j }
     })
   }
 
-  const allFilled = R32_FIXTURES.every(f => {
+  const allFilled = fixtures.every(f => {
     const p = form.predictions[f.id]
     return p && p.home !== '' && p.away !== ''
   })
@@ -87,7 +140,7 @@ export default function EnterKnockoutPage() {
     setSubmitting(true)
     setError('')
 
-    const rows = R32_FIXTURES.map(f => ({
+    const rows = fixtures.map(f => ({
       participant_id: form.participantId,
       fixture_id: f.id,
       home_score: Number(form.predictions[f.id].home),
@@ -101,7 +154,7 @@ export default function EnterKnockoutPage() {
 
     if (err) { setError(err.message); setSubmitting(false); return }
 
-    localStorage.removeItem(STORAGE_KEY)
+    if (currentRound) localStorage.removeItem(STORAGE_KEY(currentRound))
     navigate('/submitted?stage=knockout')
   }
 
@@ -125,6 +178,8 @@ export default function EnterKnockoutPage() {
     )
   }
 
+  const roundLabel = currentRound ? ROUND_LABELS[currentRound] : ''
+
   return (
     <div className="min-h-screen bg-[#060d1f] text-white">
       {/* Header */}
@@ -132,12 +187,12 @@ export default function EnterKnockoutPage() {
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-black">⚔️ Knockout Stage</h1>
-            <p className="text-xs text-blue-400">World Cup 2026 · Round of 32 Predictions</p>
+            <p className="text-xs text-blue-400">World Cup 2026 · {roundLabel} Predictions</p>
           </div>
           <div className="text-right">
             <div className="text-xs text-blue-400">Jokers used</div>
-            <div className={`text-lg font-black ${form.jokers.size === KO_JOKER_LIMIT ? 'text-red-400' : 'text-yellow-400'}`}>
-              {form.jokers.size}/{KO_JOKER_LIMIT}
+            <div className={`text-lg font-black ${form.jokers.size === jokerLimit ? 'text-red-400' : 'text-yellow-400'}`}>
+              {form.jokers.size}/{jokerLimit}
             </div>
           </div>
         </div>
@@ -150,7 +205,7 @@ export default function EnterKnockoutPage() {
           <h2 className="font-black text-sm uppercase tracking-wider text-blue-400 mb-3">Who are you?</h2>
           {form.participantId && existingPredIds.size > 0 && (
             <div className="mb-3 bg-yellow-400/10 border border-yellow-400/30 rounded-xl px-4 py-2.5 text-sm text-yellow-300">
-              ⚠️ You've already submitted knockout predictions — submitting again will overwrite them.
+              ⚠️ You've already submitted {roundLabel} predictions — submitting again will overwrite them.
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
@@ -175,8 +230,8 @@ export default function EnterKnockoutPage() {
           <div className="flex items-start gap-3">
             <div className="text-2xl">🃏</div>
             <div>
-              <div className="font-black text-yellow-300">You have {KO_JOKER_LIMIT} Jokers for the knockout stage</div>
-              <div className="text-sm text-yellow-400/80 mt-1">Use them on any Round of 32 game. A Joker doubles your points — 4pts for correct result, 10pts for correct score.</div>
+              <div className="font-black text-yellow-300">You have {jokerLimit} Joker{jokerLimit !== 1 ? 's' : ''} for the {roundLabel}</div>
+              <div className="text-sm text-yellow-400/80 mt-1">Use them on any game. A Joker doubles your points — 4pts for correct result, 10pts for correct score.</div>
             </div>
           </div>
         </div>
@@ -184,17 +239,17 @@ export default function EnterKnockoutPage() {
         {/* Fixtures */}
         <div className="bg-[#0c1733] border border-blue-900 rounded-2xl overflow-hidden">
           <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800">
-            <h2 className="font-black">{ROUND_LABELS.R32}</h2>
-            <p className="text-xs text-blue-400 mt-0.5">Pick a score for every game · mark up to {KO_JOKER_LIMIT} as Jokers</p>
+            <h2 className="font-black">{roundLabel}</h2>
+            <p className="text-xs text-blue-400 mt-0.5">Pick a score for every game · mark up to {jokerLimit} as Joker{jokerLimit !== 1 ? 's' : ''}</p>
           </div>
           <div className="divide-y divide-blue-900/40">
-            {[...R32_FIXTURES].sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc)).map(f => (
+            {fixtures.map(f => (
               <FixtureRow
                 key={f.id}
                 fixture={f}
                 prediction={form.predictions[f.id] ?? { home: '', away: '' }}
                 isJoker={form.jokers.has(f.id)}
-                jokersFull={form.jokers.size >= KO_JOKER_LIMIT && !form.jokers.has(f.id)}
+                jokersFull={form.jokers.size >= jokerLimit && !form.jokers.has(f.id)}
                 onScore={setScore}
                 onJoker={toggleJoker}
               />
@@ -209,7 +264,7 @@ export default function EnterKnockoutPage() {
           disabled={submitting || !allFilled || !form.participantId}
           className="w-full py-4 rounded-2xl font-black text-lg bg-gradient-to-r from-red-600 to-red-800 text-white disabled:opacity-40 transition hover:opacity-90"
         >
-          {submitting ? 'Submitting...' : allFilled ? '🚀 Submit Knockout Predictions' : 'Fill in all scores to submit'}
+          {submitting ? 'Submitting...' : allFilled ? `🚀 Submit ${roundLabel} Predictions` : 'Fill in all scores to submit'}
         </button>
         <p className="text-center text-xs text-blue-600 pb-6">Predictions for later rounds will open as the tournament progresses</p>
       </div>
@@ -225,14 +280,16 @@ function FixtureRow({ fixture, prediction, isJoker, jokersFull, onScore, onJoker
   onScore: (id: string, side: 'home' | 'away', val: string) => void
   onJoker: (id: string) => void
 }) {
-  const isTBD = fixture.homeTeam === 'TBD'
+  const isTBD = fixture.homeTeam === 'TBD' || fixture.awayTeam === 'TBD'
   return (
     <div className={`px-4 py-4 ${isJoker ? 'bg-yellow-400/5' : ''}`}>
       <div className="flex items-center gap-3">
         {/* Home */}
         <div className="flex-1 text-right">
           <div className="text-sm font-bold">
-            {isTBD ? <span className="text-blue-600">TBD</span> : <>{getTeamFlag(fixture.homeTeam)} {fixture.homeTeam}</>}
+            {fixture.homeTeam === 'TBD'
+              ? <span className="text-blue-600">TBD</span>
+              : <>{getTeamFlag(fixture.homeTeam)} {fixture.homeTeam}</>}
           </div>
         </div>
 
@@ -243,6 +300,7 @@ function FixtureRow({ fixture, prediction, isJoker, jokersFull, onScore, onJoker
             value={prediction.home}
             onChange={e => onScore(fixture.id, 'home', e.target.value)}
             className="score-input"
+            disabled={isTBD}
           />
           <span className="text-blue-700 font-black">–</span>
           <input
@@ -250,13 +308,16 @@ function FixtureRow({ fixture, prediction, isJoker, jokersFull, onScore, onJoker
             value={prediction.away}
             onChange={e => onScore(fixture.id, 'away', e.target.value)}
             className="score-input"
+            disabled={isTBD}
           />
         </div>
 
         {/* Away */}
         <div className="flex-1">
           <div className="text-sm font-bold">
-            {isTBD ? <span className="text-blue-600">TBD</span> : <>{getTeamFlag(fixture.awayTeam)} {fixture.awayTeam}</>}
+            {fixture.awayTeam === 'TBD'
+              ? <span className="text-blue-600">TBD</span>
+              : <>{getTeamFlag(fixture.awayTeam)} {fixture.awayTeam}</>}
           </div>
         </div>
       </div>
@@ -270,11 +331,11 @@ function FixtureRow({ fixture, prediction, isJoker, jokersFull, onScore, onJoker
         </div>
         <button
           onClick={() => onJoker(fixture.id)}
-          disabled={jokersFull}
+          disabled={jokersFull || isTBD}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition ${
             isJoker
               ? 'bg-yellow-400 text-black'
-              : jokersFull
+              : jokersFull || isTBD
                 ? 'bg-blue-900/30 text-blue-700 cursor-not-allowed'
                 : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:border-yellow-400 hover:text-yellow-400'
           }`}
