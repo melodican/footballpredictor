@@ -364,6 +364,7 @@ export default function DashboardPage() {
                         resultsMap={resultsMap}
                         predictedWinners={predictedGroupWinners[p.id] || {} as Record<Group, string>}
                         actualWinners={actualGroupWinners}
+                        revealed={revealed}
                       />
                     )}
                   </div>
@@ -1510,16 +1511,26 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
 
 // ─── Participant Detail ───────────────────────────────────────────────────────
 
-function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, actualWinners }: {
+function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, actualWinners, revealed }: {
   participant: PlayerRow
   preds: Prediction[]
   resultsMap: Record<string, Result>
   predictedWinners: Record<Group, string>
   actualWinners: Record<Group, string | null>
+  revealed: boolean
 }) {
   const [openGroup, setOpenGroup] = useState<Group | null>(null)
   const predMap: Record<string, Prediction> = {}
   for (const p of preds) predMap[p.fixture_id] = p
+
+  const koPreds = preds.filter(p => KNOCKOUT_FIXTURE_IDS.has(p.fixture_id))
+  const koRounds: { label: string; fixtures: KnockoutFixture[] }[] = [
+    { label: 'Round of 32', fixtures: R32_FIXTURES },
+    { label: 'Round of 16', fixtures: R16_FIXTURES },
+    { label: 'Quarter-finals', fixtures: QF_FIXTURES },
+    { label: 'Semi-finals', fixtures: SF_FIXTURES },
+    { label: 'Final', fixtures: [FINAL_FIXTURE] },
+  ]
 
   const correctWinners = GROUPS.filter(g => actualWinners[g] && predictedWinners[g] === actualWinners[g]).length
   const doneGroups = GROUPS.filter(g => actualWinners[g] !== null).length
@@ -1621,6 +1632,66 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
           </div>
         )}
       </div>
+
+      {/* Knockout Predictions */}
+      {koPreds.length > 0 && (
+        <div>
+          <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-3">⚔️ Knockout Predictions</h3>
+          {!revealed && (
+            <div className="text-xs text-yellow-500 bg-yellow-400/10 border border-yellow-400/20 rounded-xl px-3 py-2">
+              🔒 Predictions hidden until revealed
+            </div>
+          )}
+          {revealed && koRounds.map(({ label, fixtures }) => {
+            const roundPreds = fixtures.filter(f => predMap[f.id])
+            if (roundPreds.length === 0) return null
+            const roundPts = roundPreds.reduce((sum, f) => {
+              const pred = predMap[f.id]
+              const result = resultsMap[f.id]
+              if (!pred || !result) return sum
+              return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+            }, 0)
+            return (
+              <div key={label} className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-xs font-bold text-blue-300">{label}</div>
+                  {roundPts > 0 && <div className="text-xs text-yellow-400 font-bold">+{roundPts}pts</div>}
+                </div>
+                <div className="ss-card p-3 space-y-1.5">
+                  {roundPreds.map(f => {
+                    const pred = predMap[f.id]
+                    const result = resultsMap[f.id]
+                    const scored = pred && result
+                      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+                      : null
+                    return (
+                      <div key={f.id} className="flex items-center gap-2 text-xs py-1 border-b border-blue-900/40 last:border-0">
+                        <span className="flex-1 text-right text-blue-200 truncate">{getTeamFlag(f.homeTeam)} {f.homeTeam}</span>
+                        <span className="font-black text-white w-12 text-center whitespace-nowrap flex-shrink-0">
+                          {pred ? `${pred.home_score}–${pred.away_score}` : '–'}
+                        </span>
+                        <span className="flex-1 text-blue-200 truncate">{f.awayTeam} {getTeamFlag(f.awayTeam)}</span>
+                        <div className="w-20 flex items-center justify-end gap-1 flex-shrink-0">
+                          {pred?.is_joker && <span className="text-yellow-400 font-black">★</span>}
+                          {scored ? (
+                            <span className={`px-1.5 py-0.5 rounded font-black ${labelColor(scored.label)}`}>
+                              {scored.label === null ? '–' : scored.label}{scored.points > 0 ? ` +${scored.points}` : ''}
+                            </span>
+                          ) : result ? (
+                            <span className="text-blue-700 text-xs">scored</span>
+                          ) : (
+                            <span className="w-12" />
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
