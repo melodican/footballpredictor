@@ -51,10 +51,10 @@ export const R16_FIXTURES: KnockoutFixture[] = [
 ]
 
 export const QF_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_QF_1', round: 'QF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T19:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 1 },
-  { id: 'KO_QF_2', round: 'QF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-14', kickoffUtc: '2026-07-14T22:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 2 },
-  { id: 'KO_QF_3', round: 'QF', matchNumber: 3, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T19:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 1 },
-  { id: 'KO_QF_4', round: 'QF', matchNumber: 4, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-15', kickoffUtc: '2026-07-15T22:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 2 },
+  { id: 'KO_QF_1', round: 'QF', matchNumber: 1, homeTeam: 'France',    awayTeam: 'Morocco',     date: '2026-07-09', kickoffUtc: '2026-07-09T20:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_QF_2', round: 'QF', matchNumber: 2, homeTeam: 'Spain',     awayTeam: 'Belgium',     date: '2026-07-10', kickoffUtc: '2026-07-10T19:00:00Z', feedsInto: 'KO_SF_1', bracketSide: 'L', bracketSlot: 2 },
+  { id: 'KO_QF_3', round: 'QF', matchNumber: 3, homeTeam: 'Norway',    awayTeam: 'England',     date: '2026-07-11', kickoffUtc: '2026-07-11T21:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_QF_4', round: 'QF', matchNumber: 4, homeTeam: 'Argentina', awayTeam: 'Switzerland', date: '2026-07-12', kickoffUtc: '2026-07-12T01:00:00Z', feedsInto: 'KO_SF_2', bracketSide: 'R', bracketSlot: 2 },
 ]
 
 export const SF_FIXTURES: KnockoutFixture[] = [
