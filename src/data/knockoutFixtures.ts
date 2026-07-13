@@ -58,8 +58,8 @@ export const QF_FIXTURES: KnockoutFixture[] = [
 ]
 
 export const SF_FIXTURES: KnockoutFixture[] = [
-  { id: 'KO_SF_1', round: 'SF', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-18', kickoffUtc: '2026-07-18T22:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'L', bracketSlot: 1 },
-  { id: 'KO_SF_2', round: 'SF', matchNumber: 2, homeTeam: 'TBD', awayTeam: 'TBD', date: '2026-07-19', kickoffUtc: '2026-07-19T22:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'R', bracketSlot: 1 },
+  { id: 'KO_SF_1', round: 'SF', matchNumber: 1, homeTeam: 'France',  awayTeam: 'Spain',     date: '2026-07-14', kickoffUtc: '2026-07-14T19:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'L', bracketSlot: 1 },
+  { id: 'KO_SF_2', round: 'SF', matchNumber: 2, homeTeam: 'England', awayTeam: 'Argentina', date: '2026-07-15', kickoffUtc: '2026-07-15T19:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'R', bracketSlot: 1 },
 ]
 
 export const FINAL_FIXTURE: KnockoutFixture = {
