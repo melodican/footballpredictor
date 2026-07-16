@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES, FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import {
-  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
+  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, THIRD_PLACE_FIXTURE, FINAL_FIXTURE,
   KNOCKOUT_FIXTURE_IDS, KNOCKOUT_FIXTURE_MAP, BRACKET_SOURCES, KO_JOKER_LIMIT, ROUND_LABELS, getTeamFlag, getWinner,
   type KnockoutFixture, type KnockoutRound,
 } from '../data/knockoutFixtures'
@@ -136,6 +136,7 @@ export default function DashboardPage() {
           { home: pred.home_score, away: pred.away_score },
           { home: result.home_score, away: result.away_score },
           pred.is_joker,
+          pred.fixture_id === 'KO_F_1',
         )
         matchPoints += scored.points
         if (scored.label === 'S') s++
@@ -150,7 +151,7 @@ export default function DashboardPage() {
           else if (round === 'R16') r16Pts += scored.points
           else if (round === 'QF')  qfPts  += scored.points
           else if (round === 'SF')  sfPts  += scored.points
-          else if (round === 'F')   finalPts += scored.points
+          else if (round === '3RD' || round === 'F') finalPts += scored.points
         }
       }
       let groupWinnerPoints = 0
@@ -670,7 +671,8 @@ function PositionChart({ participants, predsByParticipant, results, finalOrder }
           pts += scoreFixture(
             { home: pred.home_score, away: pred.away_score },
             { home: res.home_score, away: res.away_score },
-            pred.is_joker
+            pred.is_joker,
+            pred.fixture_id === 'KO_F_1',
           ).points
         }
         return { id: p.id, pts }
@@ -1000,13 +1002,14 @@ function BracketTree({ resultsMap }: { resultsMap: Record<string, Result> }) {
 
 // ─── Knockout Bracket ─────────────────────────────────────────────────────────
 
-const ROUND_ORDER: KnockoutRound[] = ['R32', 'R16', 'QF', 'SF', 'F']
+const ROUND_ORDER: KnockoutRound[] = ['R32', 'R16', 'QF', 'SF', '3RD', 'F']
 const ROUND_FIXTURES: Record<KnockoutRound, KnockoutFixture[]> = {
-  R32: R32_FIXTURES,
-  R16: R16_FIXTURES,
-  QF:  QF_FIXTURES,
-  SF:  SF_FIXTURES,
-  F:   [FINAL_FIXTURE],
+  R32:   R32_FIXTURES,
+  R16:   R16_FIXTURES,
+  QF:    QF_FIXTURES,
+  SF:    SF_FIXTURES,
+  '3RD': [THIRD_PLACE_FIXTURE],
+  F:     [FINAL_FIXTURE],
 }
 
 function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant, revealed }: {
@@ -1088,11 +1091,12 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant, revealed
 
       {(() => {
         const roundInfo: Record<KnockoutRound, { jokers: number | null; note: string }> = {
-          R32: { jokers: 4,    note: '4 Jokers available this round' },
-          R16: { jokers: 3,    note: '3 Jokers available this round' },
-          QF:  { jokers: 2,    note: '2 Jokers available this round' },
-          SF:  { jokers: 1,    note: '1 Joker available this round' },
-          F:   { jokers: null, note: 'All points are doubled in the Final!' },
+          R32:   { jokers: 4,    note: '4 Jokers available this round' },
+          R16:   { jokers: 3,    note: '3 Jokers available this round' },
+          QF:    { jokers: 2,    note: '2 Jokers available this round' },
+          SF:    { jokers: 1,    note: '1 Joker available this round' },
+          '3RD': { jokers: 0,    note: 'No Joker — normal scoring' },
+          F:     { jokers: null, note: 'All points are doubled in the Final!' },
         }
         const info = roundInfo[activeRound]
         const hasResults = ROUND_FIXTURES[activeRound].some(f => koResultsMap[f.id])
@@ -1128,7 +1132,7 @@ function KOFixtureCard({ fixture, result, leaderboard, predsByParticipant, expan
     const pred = (predsByParticipant[p.id] || []).find(pr => pr.fixture_id === fixture.id)
     if (!pred) return null
     const scored = result
-      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker, fixture.id === 'KO_F_1')
       : null
     return { player: p, pred, scored }
   }).filter(Boolean) as { player: PlayerRow; pred: Prediction; scored: ReturnType<typeof scoreFixture> | null }[]
@@ -1314,14 +1318,14 @@ function FormTable({ leaderboard, predsByParticipant, resultsMap }: {
         const pred = predMap[fid]
         const result = resultsMap[fid]
         if (!pred || !result) return sum
-        return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+        return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker, fid === 'KO_F_1').points
       }, 0)
 
       const dots = last5.map(fid => {
         const pred = predMap[fid]
         const result = resultsMap[fid]
         if (!pred || !result) return { color: 'none', joker: false }
-        const pts = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+        const pts = scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker, fid === 'KO_F_1').points
         const color = pts >= 5 ? 'gold' : pts > 0 ? 'green' : 'red'
         return { color, joker: pred.is_joker }
       })
@@ -1558,7 +1562,8 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
     { label: 'Round of 16', fixtures: R16_FIXTURES },
     { label: 'Quarter-finals', fixtures: QF_FIXTURES },
     { label: 'Semi-finals', fixtures: SF_FIXTURES },
-    { label: 'Final', fixtures: [FINAL_FIXTURE] },
+    { label: '3rd Place Playoff', fixtures: [THIRD_PLACE_FIXTURE] },
+    { label: 'Final 🏆', fixtures: [FINAL_FIXTURE] },
   ]
 
   const correctWinners = GROUPS.filter(g => actualWinners[g] && predictedWinners[g] === actualWinners[g]).length
@@ -1678,7 +1683,7 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
               const pred = predMap[f.id]
               const result = resultsMap[f.id]
               if (!pred || !result) return sum
-              return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker).points
+              return sum + scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker, f.id === 'KO_F_1').points
             }, 0)
             return (
               <div key={label} className="mb-3">
@@ -1691,7 +1696,7 @@ function ParticipantDetail({ participant, preds, resultsMap, predictedWinners, a
                     const pred = predMap[f.id]
                     const result = resultsMap[f.id]
                     const scored = pred && result
-                      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker)
+                      ? scoreFixture({ home: pred.home_score, away: pred.away_score }, { home: result.home_score, away: result.away_score }, pred.is_joker, f.id === 'KO_F_1')
                       : null
                     return (
                       <div key={f.id} className="flex items-center gap-2 text-xs py-1 border-b border-blue-900/40 last:border-0">

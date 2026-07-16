@@ -1,6 +1,6 @@
 import { TEAM_FLAGS } from './fixtures'
 
-export type KnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | 'F'
+export type KnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | '3RD' | 'F'
 
 export interface KnockoutFixture {
   id: string
@@ -62,14 +62,20 @@ export const SF_FIXTURES: KnockoutFixture[] = [
   { id: 'KO_SF_2', round: 'SF', matchNumber: 2, homeTeam: 'England', awayTeam: 'Argentina', date: '2026-07-15', kickoffUtc: '2026-07-15T19:00:00Z', feedsInto: 'KO_F_1', bracketSide: 'R', bracketSlot: 1 },
 ]
 
+export const THIRD_PLACE_FIXTURE: KnockoutFixture = {
+  id: 'KO_3RD_1', round: '3RD', matchNumber: 1, homeTeam: 'France', awayTeam: 'England',
+  date: '2026-07-18', kickoffUtc: '2026-07-18T21:00:00Z',
+  bracketSide: 'L', bracketSlot: 1,
+}
+
 export const FINAL_FIXTURE: KnockoutFixture = {
-  id: 'KO_F_1', round: 'F', matchNumber: 1, homeTeam: 'TBD', awayTeam: 'TBD',
-  date: '2026-07-19', kickoffUtc: '2026-07-19T22:00:00Z',
+  id: 'KO_F_1', round: 'F', matchNumber: 1, homeTeam: 'Spain', awayTeam: 'Argentina',
+  date: '2026-07-19', kickoffUtc: '2026-07-19T19:00:00Z',
   bracketSide: 'L', bracketSlot: 1,
 }
 
 export const ALL_KNOCKOUT_FIXTURES: KnockoutFixture[] = [
-  ...R32_FIXTURES, ...R16_FIXTURES, ...QF_FIXTURES, ...SF_FIXTURES, FINAL_FIXTURE,
+  ...R32_FIXTURES, ...R16_FIXTURES, ...QF_FIXTURES, ...SF_FIXTURES, THIRD_PLACE_FIXTURE, FINAL_FIXTURE,
 ]
 
 export const KNOCKOUT_FIXTURE_MAP: Record<string, KnockoutFixture> = Object.fromEntries(
@@ -85,7 +91,8 @@ export const KO_ROUND_JOKER_LIMITS: Partial<Record<KnockoutRound, number>> = {
   R16: 3,
   QF: 2,
   SF: 1,
-  F: 1,
+  '3RD': 0,
+  F: 0,
 }
 
 export const ROUND_FIXTURES: Partial<Record<KnockoutRound, KnockoutFixture[]>> = {
@@ -93,7 +100,8 @@ export const ROUND_FIXTURES: Partial<Record<KnockoutRound, KnockoutFixture[]>> =
   R16: R16_FIXTURES,
   QF: QF_FIXTURES,
   SF: SF_FIXTURES,
-  F: [FINAL_FIXTURE],
+  '3RD': [THIRD_PLACE_FIXTURE],
+  F: [THIRD_PLACE_FIXTURE, FINAL_FIXTURE],
 }
 
 // Maps each fixture to the two fixtures whose winners play in it (home, away)
@@ -116,11 +124,12 @@ export const BRACKET_SOURCES: Record<string, { home: string; away: string }> = {
 }
 
 export const ROUND_LABELS: Record<KnockoutRound, string> = {
-  R32: 'Round of 32',
-  R16: 'Round of 16',
-  QF:  'Quarter-finals',
-  SF:  'Semi-finals',
-  F:   'Final',
+  R32:  'Round of 32',
+  R16:  'Round of 16',
+  QF:   'Quarter-finals',
+  SF:   'Semi-finals',
+  '3RD': '3rd Place Playoff',
+  F:    'Final',
 }
 
 export function getTeamFlag(team: string): string {

@@ -225,22 +225,49 @@ export default function EnterKnockoutPage() {
           </div>
         </div>
 
-        {/* Joker explainer */}
-        <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-2xl px-5 py-4">
-          <div className="flex items-start gap-3">
-            <div className="text-2xl">🃏</div>
-            <div>
-              <div className="font-black text-yellow-300">You have {jokerLimit} Joker{jokerLimit !== 1 ? 's' : ''} for the {roundLabel}</div>
-              <div className="text-sm text-yellow-400/80 mt-1">Use them on any game. A Joker doubles your points — 4pts for correct result, 10pts for correct score.</div>
+        {/* Joker explainer / Final banner */}
+        {currentRound === 'F' ? (
+          <>
+            <div className="bg-amber-400/10 border border-amber-400/30 rounded-2xl px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🏆</div>
+                <div>
+                  <div className="font-black text-amber-300">Final Weekend — Last predictions!</div>
+                  <div className="text-sm text-amber-400/80 mt-1">All points in the Final are automatically doubled — 4pts for correct result, 10pts for correct score. No Jokers needed.</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-blue-900/30 border border-blue-800 rounded-2xl px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🥉</div>
+                <div>
+                  <div className="font-black text-blue-200">3rd Place Playoff — Normal scoring</div>
+                  <div className="text-sm text-blue-400 mt-1">2pts correct result · 5pts correct score · No Joker</div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : jokerLimit > 0 ? (
+          <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-2xl px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">🃏</div>
+              <div>
+                <div className="font-black text-yellow-300">You have {jokerLimit} Joker{jokerLimit !== 1 ? 's' : ''} for the {roundLabel}</div>
+                <div className="text-sm text-yellow-400/80 mt-1">Use them on any game. A Joker doubles your points — 4pts for correct result, 10pts for correct score.</div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         {/* Fixtures */}
         <div className="bg-[#0c1733] border border-blue-900 rounded-2xl overflow-hidden">
           <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800">
-            <h2 className="font-black">{roundLabel}</h2>
-            <p className="text-xs text-blue-400 mt-0.5">Pick a score for every game · mark up to {jokerLimit} as Joker{jokerLimit !== 1 ? 's' : ''}</p>
+            <h2 className="font-black">{currentRound === 'F' ? 'Final Weekend' : roundLabel}</h2>
+            <p className="text-xs text-blue-400 mt-0.5">
+              {currentRound === 'F'
+                ? 'Pick a score for both games · No Jokers · Final points are doubled'
+                : `Pick a score for every game · mark up to ${jokerLimit} as Joker${jokerLimit !== 1 ? 's' : ''}`}
+            </p>
           </div>
           <div className="divide-y divide-blue-900/40">
             {fixtures.map(f => (
@@ -264,7 +291,7 @@ export default function EnterKnockoutPage() {
           disabled={submitting || !allFilled || !form.participantId}
           className="w-full py-4 rounded-2xl font-black text-lg bg-gradient-to-r from-red-600 to-red-800 text-white disabled:opacity-40 transition hover:opacity-90"
         >
-          {submitting ? 'Submitting...' : allFilled ? `🚀 Submit ${roundLabel} Predictions` : 'Fill in all scores to submit'}
+          {submitting ? 'Submitting...' : allFilled ? `🚀 Submit ${currentRound === 'F' ? 'Final Weekend' : roundLabel} Predictions` : 'Fill in all scores to submit'}
         </button>
         <p className="text-center text-xs text-blue-600 pb-6">Predictions for later rounds will open as the tournament progresses</p>
       </div>
@@ -322,26 +349,36 @@ function FixtureRow({ fixture, prediction, isJoker, jokersFull, onScore, onJoker
         </div>
       </div>
 
-      {/* Date + Joker row */}
+      {/* Date + Joker/badge row */}
       <div className="flex items-center justify-between mt-2.5">
         <div className="text-xs text-blue-600">
           {new Date(fixture.kickoffUtc).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
           {' · '}
           {new Date(fixture.kickoffUtc).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
         </div>
-        <button
-          onClick={() => onJoker(fixture.id)}
-          disabled={jokersFull || isTBD}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition ${
-            isJoker
-              ? 'bg-yellow-400 text-black'
-              : jokersFull || isTBD
-                ? 'bg-blue-900/30 text-blue-700 cursor-not-allowed'
-                : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:border-yellow-400 hover:text-yellow-400'
-          }`}
-        >
-          🃏 {isJoker ? 'Joker! ×2' : 'Use Joker'}
-        </button>
+        {fixture.round === 'F' ? (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-400/20 text-amber-300 border border-amber-400/30">
+            🏆 Points ×2
+          </span>
+        ) : fixture.round === '3RD' ? (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-blue-900/30 text-blue-500 border border-blue-800">
+            🥉 3rd Place
+          </span>
+        ) : (
+          <button
+            onClick={() => onJoker(fixture.id)}
+            disabled={jokersFull || isTBD}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition ${
+              isJoker
+                ? 'bg-yellow-400 text-black'
+                : jokersFull || isTBD
+                  ? 'bg-blue-900/30 text-blue-700 cursor-not-allowed'
+                  : 'bg-blue-900/40 border border-blue-800 text-blue-400 hover:border-yellow-400 hover:text-yellow-400'
+            }`}
+          >
+            🃏 {isJoker ? 'Joker! ×2' : 'Use Joker'}
+          </button>
+        )}
       </div>
     </div>
   )
