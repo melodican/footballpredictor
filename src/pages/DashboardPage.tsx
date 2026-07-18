@@ -1096,7 +1096,7 @@ function KnockoutBracket({ resultsMap, leaderboard, predsByParticipant, revealed
           QF:    { jokers: 2,    note: '2 Jokers available this round' },
           SF:    { jokers: 1,    note: '1 Joker available this round' },
           '3RD': { jokers: 0,    note: 'No Joker — normal scoring' },
-          F:     { jokers: null, note: 'All points are doubled in the Final!' },
+          F:     { jokers: null, note: 'Forced Joker + doubled = ×4 points in the Final!' },
         }
         const info = roundInfo[activeRound]
         const hasResults = ROUND_FIXTURES[activeRound].some(f => koResultsMap[f.id])

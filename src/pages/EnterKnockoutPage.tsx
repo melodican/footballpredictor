@@ -233,7 +233,7 @@ export default function EnterKnockoutPage() {
                 <div className="text-2xl">🏆</div>
                 <div>
                   <div className="font-black text-amber-300">Final Weekend — Last predictions!</div>
-                  <div className="text-sm text-amber-400/80 mt-1">All points in the Final are automatically doubled — 4pts for correct result, 10pts for correct score. No Jokers needed.</div>
+                  <div className="text-sm text-amber-400/80 mt-1">The Final has a forced Joker AND points are doubled — 8pts for correct result, 20pts for correct score!</div>
                 </div>
               </div>
             </div>

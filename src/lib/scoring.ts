@@ -100,7 +100,7 @@ export function scoreFixture(
   }
 
   if (isJoker) points *= 2
-  if (isFinal) points *= 2 // forced double in final
+  if (isFinal) points *= 4 // forced joker (×2) + final double (×2) = ×4
 
   return { label, points, prediction }
 }
