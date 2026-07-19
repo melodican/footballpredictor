@@ -3,18 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { FIXTURES_BY_GROUP, TEAM_FLAGS, GROUP_TEAMS } from '../data/fixtures'
 import {
-  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, FINAL_FIXTURE,
+  R32_FIXTURES, R16_FIXTURES, QF_FIXTURES, SF_FIXTURES, THIRD_PLACE_FIXTURE, FINAL_FIXTURE,
   getTeamFlag, ROUND_LABELS, type KnockoutRound,
 } from '../data/knockoutFixtures'
 import type { Result, TournamentSettings } from '../types'
 import { GROUPS } from '../types'
 
 const KO_ROUNDS: { round: KnockoutRound; fixtures: typeof R32_FIXTURES }[] = [
-  { round: 'R32', fixtures: R32_FIXTURES },
-  { round: 'R16', fixtures: R16_FIXTURES },
-  { round: 'QF',  fixtures: QF_FIXTURES },
-  { round: 'SF',  fixtures: SF_FIXTURES },
-  { round: 'F',   fixtures: [FINAL_FIXTURE] },
+  { round: 'R32',  fixtures: R32_FIXTURES },
+  { round: 'R16',  fixtures: R16_FIXTURES },
+  { round: 'QF',   fixtures: QF_FIXTURES },
+  { round: 'SF',   fixtures: SF_FIXTURES },
+  { round: '3RD',  fixtures: [THIRD_PLACE_FIXTURE] },
+  { round: 'F',    fixtures: [FINAL_FIXTURE] },
 ]
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'wc2026admin'
