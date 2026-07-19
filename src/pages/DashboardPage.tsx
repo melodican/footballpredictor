@@ -306,7 +306,7 @@ export default function DashboardPage() {
             )}
 
             {/* Leaderboard */}
-            <LeaderboardSection leaderboard={leaderboard} />
+            <LeaderboardSection leaderboard={leaderboard} actualWinner={settings?.actual_tournament_winner ?? null} actualGoldenBoot={settings?.actual_golden_boot ?? null} />
 
             {/* Position Chart */}
             {results.length >= 2 && (
@@ -368,7 +368,11 @@ export default function DashboardPage() {
                       <PlayerAvatar name={p.name} size="md" />
                       <div className="flex-1 min-w-0">
                         <div className="font-bold">{p.name}</div>
-                        <div className="text-xs text-blue-400">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                        <div className="text-xs flex gap-1.5 flex-wrap">
+                          <span className={settings?.actual_tournament_winner && p.winner_pick === settings.actual_tournament_winner ? 'text-emerald-400 font-bold' : 'text-blue-400'}>🏆 {p.winner_pick}</span>
+                          <span className="text-blue-700">·</span>
+                          <span className={settings?.actual_golden_boot && p.top_scorer_pick === settings.actual_golden_boot ? 'text-emerald-400 font-bold' : 'text-blue-400'}>⚽ {p.top_scorer_pick}</span>
+                        </div>
                       </div>
                       <div className="text-right mr-2">
                         <div className="font-black text-yellow-400">{p.total} pts</div>
@@ -1425,7 +1429,7 @@ function PointsGuide() {
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
 
-function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
+function LeaderboardSection({ leaderboard, actualWinner, actualGoldenBoot }: { leaderboard: PlayerRow[], actualWinner: string | null, actualGoldenBoot: string | null }) {
   return (
     <div className="ss-card overflow-hidden">
       <div className="bg-blue-900/60 px-5 py-3 border-b border-blue-800 flex items-center gap-3">
@@ -1482,7 +1486,11 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
                     <PlayerAvatar name={p.name} size="sm" />
                     <div>
                       <div className="font-bold">{p.name}</div>
-                      <div className="text-xs text-blue-500">🏆 {p.winner_pick} · ⚽ {p.top_scorer_pick}</div>
+                      <div className="text-xs flex gap-1.5 flex-wrap">
+                        <span className={actualWinner && p.winner_pick === actualWinner ? 'text-emerald-400 font-bold' : 'text-blue-500'}>🏆 {p.winner_pick}</span>
+                        <span className="text-blue-700">·</span>
+                        <span className={actualGoldenBoot && p.top_scorer_pick === actualGoldenBoot ? 'text-emerald-400 font-bold' : 'text-blue-500'}>⚽ {p.top_scorer_pick}</span>
+                      </div>
                       <div className="flex gap-2 mt-0.5 flex-wrap">
                         {p.groupPts > 0 && <span className="text-xs text-blue-400">Grp <span className="text-white font-bold">{p.groupPts}</span></span>}
                         {p.r32Pts > 0 && <span className="text-xs text-blue-400">R32 <span className="text-white font-bold">{p.r32Pts}</span></span>}
@@ -1525,6 +1533,10 @@ function LeaderboardSection({ leaderboard }: { leaderboard: PlayerRow[] }) {
             <PlayerAvatar name={p.name} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{p.name}</div>
+              <div className="text-xs flex gap-1.5 flex-wrap mb-0.5">
+                <span className={actualWinner && p.winner_pick === actualWinner ? 'text-emerald-400 font-bold' : 'text-blue-500'}>🏆 {p.winner_pick}</span>
+                <span className={actualGoldenBoot && p.top_scorer_pick === actualGoldenBoot ? 'text-emerald-400 font-bold' : 'text-blue-500'}>⚽ {p.top_scorer_pick}</span>
+              </div>
               <div className="text-xs text-blue-400 flex gap-2 flex-wrap">
                 {p.groupPts > 0 && <span>Grp <span className="text-white font-bold">{p.groupPts}</span></span>}
                 {p.r32Pts > 0 && <span>R32 <span className="text-white font-bold">{p.r32Pts}</span></span>}
