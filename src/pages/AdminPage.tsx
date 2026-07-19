@@ -235,29 +235,31 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
             <div className="glass rounded-2xl p-5 space-y-4">
               <div>
                 <p className="font-bold text-white text-sm">🏆 Tournament Winner <span className="text-yellow-400">(+10 pts)</span></p>
-                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Set when the tournament ends — auto-awards 10pts to correct pickers</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={tournamentWinner}
-                    onChange={e => setTournamentWinner(e.target.value)}
-                    placeholder="e.g. England"
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
-                  />
-                </div>
+                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Set when the final ends — auto-awards 10pts to correct pickers</p>
+                <select
+                  value={tournamentWinner}
+                  onChange={e => setTournamentWinner(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
+                >
+                  <option value="">— Select winner —</option>
+                  <option value="Spain">🇪🇸 Spain</option>
+                  <option value="Argentina">🇦🇷 Argentina</option>
+                </select>
               </div>
               <div>
                 <p className="font-bold text-white text-sm">⚽ Golden Boot <span className="text-yellow-400">(+10 pts)</span></p>
-                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Set when the tournament ends — auto-awards 10pts to correct pickers</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={goldenBoot}
-                    onChange={e => setGoldenBoot(e.target.value)}
-                    placeholder="e.g. Harry Kane"
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
-                  />
-                </div>
+                <p className="text-zinc-500 text-xs mt-0.5 mb-2">Start typing — suggestions come from what players picked</p>
+                <input
+                  type="text"
+                  list="scorer-suggestions"
+                  value={goldenBoot}
+                  onChange={e => setGoldenBoot(e.target.value)}
+                  placeholder="Start typing a name…"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400"
+                />
+                <datalist id="scorer-suggestions">
+                  {topScorerPicks.map(({ name }) => name && <option key={name} value={name} />)}
+                </datalist>
               </div>
               <button
                 disabled={savingEndgame}
